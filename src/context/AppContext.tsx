@@ -1,5 +1,35 @@
-import React, { createContext, useContext, useState, ReactNode } from "react";
-import { User, Book, Review, Loan, mockBooks, mockReviews, mockUsers, mockLoans } from "../mocks/mockData";
+import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { User, Book, Review, Loan, mockBooks, mockReviews, mockLoans } from "../mocks/mockData";
+import { authApi, Gender, LoginResponse } from "../api/auth";
+import { booksApi, BookResponse } from "../api/books";
+import { restoreTokenFromStorage, setAuthToken, getAuthToken } from "../api/http";
+
+const USER_STORAGE_KEY = "lassriver.auth.user";
+
+function mapBackendRole(role: string): User["role"] {
+  return role === "ADMIN" ? "admin" : "user";
+}
+
+function bookFromBackend(b: BookResponse): Book {
+  return {
+    id: String(b.id),
+    title: b.title,
+    author: b.author,
+    isbn: b.isbn,
+    category: b.category ?? "General",
+    language: b.language ?? "Español",
+    publisher: "—",
+    publishDate: b.createdAt?.slice(0, 10) ?? "",
+    pages: 0,
+    description: "",
+    coverUrl:
+      b.coverUrl ||
+      "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400&h=600&fit=crop",
+    rating: 0,
+    available: (b.status ?? "ACTIVE").toUpperCase() === "ACTIVE",
+    reviewCount: 0,
+  };
+}
 
 interface AppContextType {
   currentUser: User | null;
@@ -16,9 +46,18 @@ interface AppContextType {
   selectedBook: Book | null;
   sidebarCollapsed: boolean;
   theme: "light" | "dark";
-  login: (email: string, password: string) => boolean;
-  register: (name: string, email: string, password: string) => boolean;
-  logout: () => void;
+  authLoading: boolean;
+  authError: string | null;
+  login: (email: string, password: string) => Promise<boolean>;
+  register: (input: {
+    name: string;
+    email: string;
+    password: string;
+    gender: Gender;
+    birthDate: string;
+  }) => Promise<boolean>;
+  logout: () => Promise<void>;
+  refreshBooks: () => Promise<void>;
   updateProfile: (user: Partial<User>) => void;
   setSearchQuery: (query: string) => void;
   setCategoryFilter: (category: string) => void;
@@ -58,32 +97,94 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
-  const login = (email: string, password: string): boolean => {
-    const user = mockUsers.find((u) => u.email === email);
-    if (user) {
-      setCurrentUser(user);
-      return true;
+  const refreshBooks = async () => {
+    if (!getAuthToken()) return;
+    try {
+      const page = await booksApi.list({ size: 100 });
+      setBooks(page.content.map(bookFromBackend));
+    } catch (err) {
+      console.warn("[AppContext] No se pudieron cargar libros del backend:", err);
     }
-    return false;
   };
 
-  const register = (name: string, email: string, password: string): boolean => {
-    if (mockUsers.find((u) => u.email === email)) {
-      return false;
+  useEffect(() => {
+    const token = restoreTokenFromStorage();
+    const storedUser = localStorage.getItem(USER_STORAGE_KEY);
+    if (token && storedUser) {
+      try {
+        const parsed = JSON.parse(storedUser) as User;
+        setCurrentUser(parsed);
+        refreshBooks();
+      } catch {
+        localStorage.removeItem(USER_STORAGE_KEY);
+        setAuthToken(null);
+      }
     }
-    const newUser: User = {
-      id: `u${Date.now()}`,
-      name,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const persistSession = (res: LoginResponse, email: string) => {
+    const user: User = {
+      id: String(res.id),
+      name: res.name,
       email,
-      role: "user",
+      role: mapBackendRole(res.role),
     };
-    setCurrentUser(newUser);
-    return true;
+    setCurrentUser(user);
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
   };
 
-  const logout = () => {
+  const login = async (email: string, password: string): Promise<boolean> => {
+    setAuthLoading(true);
+    setAuthError(null);
+    try {
+      const res = await authApi.login({ email, password });
+      persistSession(res, email);
+      await refreshBooks();
+      return true;
+    } catch (err: any) {
+      const msg = err?.message || "No se pudo iniciar sesión";
+      setAuthError(msg);
+      return false;
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const register = async (input: {
+    name: string;
+    email: string;
+    password: string;
+    gender: Gender;
+    birthDate: string;
+  }): Promise<boolean> => {
+    setAuthLoading(true);
+    setAuthError(null);
+    try {
+      await authApi.register(input);
+      const ok = await login(input.email, input.password);
+      return ok;
+    } catch (err: any) {
+      const msg = err?.message || "No se pudo registrar la cuenta";
+      setAuthError(msg);
+      return false;
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await authApi.logout();
+    } catch {
+      setAuthToken(null);
+    }
+    localStorage.removeItem(USER_STORAGE_KEY);
     setCurrentUser(null);
+    setBooks(mockBooks);
     setCurrentView("home");
   };
 
@@ -218,9 +319,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         selectedBook,
         sidebarCollapsed,
         theme,
+        authLoading,
+        authError,
         login,
         register,
         logout,
+        refreshBooks,
         updateProfile,
         setSearchQuery,
         setCategoryFilter,
