@@ -3,7 +3,7 @@ import { useApp } from "../context/AppContext";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
-import { User, Mail, Shield, LogIn, Heart, MessageSquare } from "lucide-react";
+import { User, Mail, Shield, LogIn, Heart, MessageSquare, BookOpen } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState } from "../components/EmptyState";
 import { RoleBadge } from "../components/RoleBadge";
@@ -11,7 +11,7 @@ import { RatingStars } from "../components/RatingStars";
 import { firstError, validateProfile } from "../utils/validation";
 
 export function Profile() {
-  const { currentUser, updateProfile, reviews, favorites, setCurrentView } = useApp();
+  const { currentUser, updateProfile, reviews, books, favorites, setCurrentView, setSelectedBook } = useApp();
   const [name, setName] = useState(currentUser?.name || "");
   const [email, setEmail] = useState(currentUser?.email || "");
 
@@ -30,6 +30,16 @@ export function Profile() {
   }
 
   const userReviews = reviews.filter((r) => r.userId === currentUser.id);
+
+  const goToReviewedBook = (bookId: string) => {
+    const book = books.find((item) => item.id === bookId);
+    if (!book) {
+      toast.error("No se encontro el libro de esta resena");
+      return;
+    }
+    setSelectedBook(book);
+    setCurrentView("book-detail");
+  };
 
   const handleSave = async () => {
     const validationError = firstError(validateProfile({ name, email }));
@@ -148,15 +158,37 @@ export function Profile() {
               </p>
             ) : (
               <div className="space-y-3">
-                {userReviews.slice(0, 5).map((review) => (
-                  <div key={review.id} className="p-4 bg-muted/30 rounded-xl border border-border">
-                    <div className="flex items-center justify-between mb-2">
-                      <RatingStars rating={review.rating} readonly size="sm" />
-                      <p className="text-xs text-muted-foreground">{review.date}</p>
+                {userReviews.slice(0, 5).map((review) => {
+                  const reviewedBook = books.find((book) => book.id === review.bookId);
+
+                  return (
+                    <div key={review.id} className="p-4 bg-muted/30 rounded-xl border border-border">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-3">
+                        <div className="space-y-1">
+                          <p className="text-sm font-semibold text-foreground">
+                            {reviewedBook?.title ?? "Libro no disponible"}
+                          </p>
+                          <div className="flex items-center gap-3">
+                            <RatingStars rating={review.rating} readonly size="sm" />
+                            <p className="text-xs text-muted-foreground">{review.date}</p>
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={!reviewedBook}
+                          onClick={() => goToReviewedBook(review.bookId)}
+                          className="shrink-0"
+                        >
+                          <BookOpen className="h-4 w-4 mr-2" />
+                          Ir al libro
+                        </Button>
+                      </div>
+                      <p className="text-sm text-muted-foreground line-clamp-2">{review.comment}</p>
                     </div>
-                    <p className="text-sm text-muted-foreground line-clamp-2">{review.comment}</p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </CardContent>
