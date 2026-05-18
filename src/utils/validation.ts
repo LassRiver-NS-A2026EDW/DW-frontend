@@ -85,6 +85,22 @@ export function validateProfile(input: { name: string; email: string }): string[
   return errors;
 }
 
+export function validatePasswordChange(input: {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+  passwordIsStrong: boolean;
+}): string[] {
+  const errors: string[] = [];
+  pushIf(errors, !input.currentPassword, "La contrasena actual es obligatoria");
+  pushIf(errors, !input.newPassword, "La nueva contrasena es obligatoria");
+  pushIf(errors, Boolean(input.newPassword) && input.newPassword.length < 8, "La nueva contrasena debe tener al menos 8 caracteres");
+  pushIf(errors, Boolean(input.newPassword) && !input.passwordIsStrong, "La nueva contrasena no cumple los criterios de seguridad");
+  pushIf(errors, input.newPassword !== input.confirmPassword, "Las contrasenas no coinciden");
+  pushIf(errors, Boolean(input.currentPassword) && input.currentPassword === input.newPassword, "La nueva contrasena debe ser diferente a la actual");
+  return errors;
+}
+
 export function validateReview(input: { bookId: string | number; rating: number; comment: string }): string[] {
   const errors: string[] = [];
   const comment = input.comment.trim();

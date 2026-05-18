@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useApp } from "../context/AppContext";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -22,11 +22,30 @@ import {
   CheckCircle,
   XCircle,
   Home,
+  Pencil,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState } from "../components/EmptyState";
 import { StatusBadge } from "../components/StatusBadge";
 import { TableSkeleton } from "../components/LoadingSkeleton";
+import { Book } from "../mocks/mockData";
+
+const blankBookForm: Omit<Book, "id"> = {
+  title: "",
+  author: "",
+  isbn: "",
+  category: "",
+  language: "Espanol",
+  publisher: "",
+  publishDate: "",
+  pages: 1,
+  description: "",
+  coverUrl: "",
+  rating: 0,
+  available: true,
+  reviewCount: 0,
+};
 
 export function Admin() {
   const {
@@ -46,8 +65,10 @@ export function Admin() {
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<"dashboard" | "books" | "loans" | "reviews">("dashboard");
-  const [editingBook, setEditingBook] = useState<any>(null);
+  const [editingBook, setEditingBook] = useState<Book | null>(null);
   const [showAddBook, setShowAddBook] = useState(false);
+  const [bookForm, setBookForm] = useState<Omit<Book, "id">>(blankBookForm);
+  const [savingBook, setSavingBook] = useState(false);
 
   useEffect(() => {
     if (currentUser?.role !== "admin") return;
@@ -81,6 +102,47 @@ export function Admin() {
   const activeLoans = loans.filter((l) => l.status === "active");
   const overdueLoans = loans.filter((l) => l.status === "overdue");
   const flaggedReviews = reviews.filter((r) => r.flagged);
+
+  const openAddBook = () => {
+    setEditingBook(null);
+    setBookForm(blankBookForm);
+    setShowAddBook(true);
+  };
+
+  const openEditBook = (book: Book) => {
+    setEditingBook(book);
+    setBookForm({ ...book });
+    setShowAddBook(true);
+  };
+
+  const closeBookForm = () => {
+    setEditingBook(null);
+    setShowAddBook(false);
+    setBookForm(blankBookForm);
+  };
+
+  const updateBookForm = (field: keyof Omit<Book, "id">, value: string | number | boolean) => {
+    setBookForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const submitBookForm = async (e: FormEvent) => {
+    e.preventDefault();
+    setSavingBook(true);
+    try {
+      if (editingBook) {
+        await updateBook(editingBook.id, bookForm);
+        toast.success("Libro actualizado correctamente");
+      } else {
+        await addBook(bookForm);
+        toast.success("Libro creado correctamente");
+      }
+      closeBookForm();
+    } catch (err: any) {
+      toast.error(err?.message || "No se pudo guardar el libro");
+    } finally {
+      setSavingBook(false);
+    }
+  };
 
   return (
     <div className="flex-1 overflow-auto">
@@ -164,7 +226,7 @@ export function Admin() {
           <div className="space-y-4">
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-bold">Gestión de Libros</h2>
-              <Button onClick={() => setShowAddBook(true)}>
+              <Button onClick={openAddBook}>
                 <Plus className="h-4 w-4 mr-2" />
                 Agregar Libro
               </Button>
@@ -194,6 +256,14 @@ export function Admin() {
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => openEditBook(book)}
+                            aria-label="Editar libro"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
                           <Button
                             variant="ghost"
                             size="icon"
@@ -335,6 +405,65 @@ export function Admin() {
                     ))}
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {showAddBook && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <Card className="w-full max-w-3xl max-h-[90vh] overflow-auto">
+              <CardHeader>
+                <CardTitle>{editingBook ? "Editar Libro" : "Agregar Libro"}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form className="space-y-4" onSubmit={submitBookForm}>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Input placeholder="Titulo" value={bookForm.title} onChange={(e) => updateBookForm("title", e.target.value)} />
+                    <Input placeholder="Autor" value={bookForm.author} onChange={(e) => updateBookForm("author", e.target.value)} />
+                    <Input placeholder="ISBN" value={bookForm.isbn} onChange={(e) => updateBookForm("isbn", e.target.value)} />
+                    <Input placeholder="Categoria" value={bookForm.category} onChange={(e) => updateBookForm("category", e.target.value)} />
+                    <Input placeholder="Idioma" value={bookForm.language} onChange={(e) => updateBookForm("language", e.target.value)} />
+                    <Input placeholder="Editorial" value={bookForm.publisher} onChange={(e) => updateBookForm("publisher", e.target.value)} />
+                    <Input type="date" value={bookForm.publishDate} onChange={(e) => updateBookForm("publishDate", e.target.value)} />
+                    <Input
+                      type="number"
+                      min={1}
+                      placeholder="Paginas"
+                      value={bookForm.pages || ""}
+                      onChange={(e) => updateBookForm("pages", Number(e.target.value))}
+                    />
+                    <Input
+                      className="md:col-span-2"
+                      placeholder="URL de portada"
+                      value={bookForm.coverUrl}
+                      onChange={(e) => updateBookForm("coverUrl", e.target.value)}
+                    />
+                  </div>
+                  <Textarea
+                    placeholder="Descripcion"
+                    value={bookForm.description}
+                    onChange={(e) => updateBookForm("description", e.target.value)}
+                    rows={4}
+                  />
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={bookForm.available}
+                      onChange={(e) => updateBookForm("available", e.target.checked)}
+                    />
+                    Disponible
+                  </label>
+                  <div className="flex justify-end gap-2">
+                    <Button type="button" variant="outline" onClick={closeBookForm} disabled={savingBook}>
+                      Cancelar
+                    </Button>
+                    <Button type="submit" disabled={savingBook}>
+                      {savingBook && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                      {editingBook ? "Guardar cambios" : "Crear libro"}
+                    </Button>
+                  </div>
+                </form>
               </CardContent>
             </Card>
           </div>

@@ -8,12 +8,17 @@ import { toast } from "sonner";
 import { EmptyState } from "../components/EmptyState";
 import { RoleBadge } from "../components/RoleBadge";
 import { RatingStars } from "../components/RatingStars";
-import { firstError, validateProfile } from "../utils/validation";
+import { PasswordStrength, isPasswordStrong } from "../components/PasswordStrength";
+import { firstError, validatePasswordChange, validateProfile } from "../utils/validation";
 
 export function Profile() {
-  const { currentUser, updateProfile, reviews, books, favorites, setCurrentView, setSelectedBook } = useApp();
+  const { currentUser, updateProfile, changePassword, reviews, books, favorites, setCurrentView, setSelectedBook } = useApp();
   const [name, setName] = useState(currentUser?.name || "");
   const [email, setEmail] = useState(currentUser?.email || "");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
 
   if (!currentUser) {
     return (
@@ -52,6 +57,33 @@ export function Profile() {
       toast.success("Perfil actualizado correctamente");
     } catch (err: any) {
       toast.error(err?.message || "No se pudo actualizar el perfil");
+    }
+  };
+
+  const handlePasswordChange = async () => {
+    const validationError = firstError(
+      validatePasswordChange({
+        currentPassword,
+        newPassword,
+        confirmPassword,
+        passwordIsStrong: isPasswordStrong(newPassword),
+      })
+    );
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      await changePassword({ currentPassword, newPassword });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      toast.success("Contrasena actualizada correctamente");
+    } catch (err: any) {
+      toast.error(err?.message || "No se pudo cambiar la contrasena");
+    } finally {
+      setChangingPassword(false);
     }
   };
 
@@ -144,6 +176,38 @@ export function Profile() {
               <Input value={currentUser.role} disabled />
             </div>
             <Button onClick={handleSave}>Guardar Cambios</Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Cambiar Contrasena</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Input
+              type="password"
+              placeholder="Contrasena actual"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+            />
+            <div className="space-y-2">
+              <Input
+                type="password"
+                placeholder="Nueva contrasena"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+              />
+              <PasswordStrength value={newPassword} />
+            </div>
+            <Input
+              type="password"
+              placeholder="Confirmar nueva contrasena"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+            />
+            <Button onClick={handlePasswordChange} disabled={changingPassword}>
+              {changingPassword ? "Actualizando..." : "Actualizar Contrasena"}
+            </Button>
           </CardContent>
         </Card>
 

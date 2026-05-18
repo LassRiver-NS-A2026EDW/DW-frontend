@@ -15,6 +15,11 @@ export interface UserProfileUpdateRequest {
   email: string;
 }
 
+export interface PasswordChangeRequest {
+  currentPassword: string;
+  newPassword: string;
+}
+
 export const usersApi = {
   me(): Promise<UserProfileResponse> {
     return http<UserProfileResponse>("/users/me");
@@ -22,5 +27,9 @@ export const usersApi = {
 
   updateMe(payload: UserProfileUpdateRequest): Promise<UserProfileResponse> {
     return http<UserProfileResponse>("/users/me", { method: "PUT", body: payload });
+  },
+
+  changePassword(payload: PasswordChangeRequest): Promise<void> {
+    return http<void>("/users/me/password", { method: "PATCH", body: payload });
   },
 };

@@ -16,6 +16,11 @@ import { SelectContent, SelectItem, SelectTrigger, SelectValue } from "../compon
 export function Catalog() {
   const {
     books,
+    booksLoading,
+    bookPage,
+    bookTotalElements,
+    bookTotalPages,
+    setBookPage,
     favorites,
     searchQuery,
     setSearchQuery,
@@ -33,26 +38,15 @@ export function Catalog() {
     currentUser,
   } = useApp();
 
-  const [loading] = useState(false);
   const [showFilters, setShowFilters] = useState(true);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
 
   const filteredBooks = useMemo(() => {
     return books.filter((book) => {
-      const matchesSearch =
-        book.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        book.author.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesCategory = categoryFilter === "all" || book.category === categoryFilter;
-      const matchesLanguage = languageFilter === "all" || book.language === languageFilter;
       const matchesRating = ratingFilter === "all" || book.rating >= parseFloat(ratingFilter);
-      const matchesAvailability =
-        availabilityFilter === "all" ||
-        (availabilityFilter === "available" && book.available) ||
-        (availabilityFilter === "unavailable" && !book.available);
-
-      return matchesSearch && matchesCategory && matchesLanguage && matchesRating && matchesAvailability;
+      return matchesRating;
     });
-  }, [books, searchQuery, categoryFilter, languageFilter, ratingFilter, availabilityFilter]);
+  }, [books, ratingFilter]);
 
   const categories = ["all", ...Array.from(new Set(books.map((b) => b.category)))];
   const languages = ["all", ...Array.from(new Set(books.map((b) => b.language)))];
@@ -82,7 +76,7 @@ export function Catalog() {
         <div>
           <h1 className="text-3xl font-bold text-foreground mb-2">Explorar Biblioteca</h1>
           <p className="text-muted-foreground">
-            Descubre nuestra colección de {books.length} libros disponibles
+            Descubre nuestra coleccion de {bookTotalElements} libros disponibles
           </p>
         </div>
 
@@ -175,7 +169,7 @@ export function Catalog() {
 
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
-            {filteredBooks.length} {filteredBooks.length === 1 ? "libro encontrado" : "libros encontrados"}
+            {bookTotalElements} {bookTotalElements === 1 ? "libro encontrado" : "libros encontrados"}
           </p>
           <Button
             variant="outline"
@@ -192,7 +186,7 @@ export function Catalog() {
           </Button>
         </div>
 
-        {loading ? (
+        {booksLoading ? (
           <BookGridSkeleton count={8} />
         ) : filteredBooks.length === 0 ? (
           <EmptyState
@@ -262,6 +256,32 @@ export function Catalog() {
                 </CardContent>
               </Card>
             ))}
+          </div>
+        )}
+
+        {!booksLoading && bookTotalPages > 1 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+            <p className="text-sm text-muted-foreground">
+              Pagina {bookPage + 1} de {bookTotalPages}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={bookPage === 0}
+                onClick={() => setBookPage(Math.max(0, bookPage - 1))}
+              >
+                Anterior
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={bookPage >= bookTotalPages - 1}
+                onClick={() => setBookPage(Math.min(bookTotalPages - 1, bookPage + 1))}
+              >
+                Siguiente
+              </Button>
+            </div>
           </div>
         )}
       </div>

@@ -28,6 +28,25 @@ export interface ApiError extends Error {
   payload?: unknown;
 }
 
+export function getApiErrorMessage(err: unknown, fallback = "No se pudo completar la operacion"): string {
+  if (err && typeof err === "object" && "fields" in err && (err as ApiError).fields) {
+    const firstFieldError = Object.values((err as ApiError).fields ?? {})[0];
+    if (firstFieldError) return firstFieldError;
+  }
+  if (err && typeof err === "object" && "message" in err && typeof (err as Error).message === "string") {
+    return (err as Error).message;
+  }
+  return fallback;
+}
+
+export function isUnauthorizedError(err: unknown): boolean {
+  return Boolean(err && typeof err === "object" && "status" in err && (err as ApiError).status === 401);
+}
+
+export function isForbiddenError(err: unknown): boolean {
+  return Boolean(err && typeof err === "object" && "status" in err && (err as ApiError).status === 403);
+}
+
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "/api";
 
 interface HttpOptions {
@@ -79,6 +98,7 @@ export async function http<T = unknown>(path: string, options: HttpOptions = {})
     if (res.status === 401) {
       setAuthToken(null);
       localStorage.removeItem("lassriver.auth.user");
+      window.dispatchEvent(new CustomEvent("bookworm:unauthorized"));
     }
     const err = new Error(
       (payload && typeof payload === "object" && "message" in payload && (payload as any).message) ||

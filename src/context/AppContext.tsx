@@ -105,6 +105,11 @@ interface AppContextType {
   reviews: Review[];
   loans: Loan[];
   favorites: string[];
+  booksLoading: boolean;
+  bookPage: number;
+  bookPageSize: number;
+  bookTotalElements: number;
+  bookTotalPages: number;
   searchQuery: string;
   categoryFilter: string;
   languageFilter: string;
@@ -131,11 +136,13 @@ interface AppContextType {
   refreshAdminReviews: () => Promise<void>;
   refreshLoans: () => Promise<void>;
   updateProfile: (user: Partial<User>) => Promise<void>;
+  changePassword: (input: { currentPassword: string; newPassword: string }) => Promise<void>;
   setSearchQuery: (query: string) => void;
   setCategoryFilter: (category: string) => void;
   setLanguageFilter: (language: string) => void;
   setRatingFilter: (rating: string) => void;
   setAvailabilityFilter: (availability: string) => void;
+  setBookPage: (page: number) => void;
   toggleFavorite: (bookId: string) => Promise<void>;
   addReview: (review: Omit<Review, "id" | "date">) => Promise<void>;
   deleteReview: (reviewId: string) => void;
@@ -160,6 +167,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [reviews, setReviews] = useState<Review[]>(mockReviews);
   const [loans, setLoans] = useState<Loan[]>(mockLoans);
   const [favorites, setFavorites] = useState<string[]>([]);
+  const [booksLoading, setBooksLoading] = useState(false);
+  const [bookPage, setBookPage] = useState(0);
+  const [bookPageSize] = useState(8);
+  const [bookTotalElements, setBookTotalElements] = useState(mockBooks.length);
+  const [bookTotalPages, setBookTotalPages] = useState(Math.max(1, Math.ceil(mockBooks.length / 8)));
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [languageFilter, setLanguageFilter] = useState("all");
@@ -173,15 +185,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [authError, setAuthError] = useState<string | null>(null);
 
   const refreshBooks = async () => {
+    setBooksLoading(true);
     try {
-      const page = await booksApi.list({ size: 100 });
+      const status =
+        availabilityFilter === "available"
+          ? "ACTIVE"
+          : availabilityFilter === "unavailable"
+            ? "INACTIVE"
+            : undefined;
+      const page = await booksApi.list({
+        page: bookPage,
+        size: bookPageSize,
+        sort: "title,asc",
+        search: searchQuery,
+        category: categoryFilter === "all" ? undefined : categoryFilter,
+        language: languageFilter === "all" ? undefined : languageFilter,
+        status,
+      });
       const mapped = page.content.map(bookFromBackend);
       setBooks(mapped);
+      setBookTotalElements(page.totalElements);
+      setBookTotalPages(Math.max(1, page.totalPages));
       setSelectedBookState((current) =>
         current ? mapped.find((book) => book.id === current.id) ?? current : current
       );
     } catch (err) {
       console.warn("[AppContext] No se pudieron cargar libros del backend:", err);
+    } finally {
+      setBooksLoading(false);
     }
   };
 
@@ -237,7 +268,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const token = restoreTokenFromStorage();
     const storedUser = localStorage.getItem(USER_STORAGE_KEY);
-    refreshBooks();
     if (token && storedUser) {
       try {
         const parsed = JSON.parse(storedUser) as User;
@@ -249,6 +279,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      localStorage.removeItem(USER_STORAGE_KEY);
+      setAuthToken(null);
+      setCurrentUser(null);
+      setFavorites([]);
+      setLoans([]);
+      setCurrentView("login");
+    };
+    window.addEventListener("bookworm:unauthorized", handleUnauthorized);
+    return () => window.removeEventListener("bookworm:unauthorized", handleUnauthorized);
+  }, []);
+
+  useEffect(() => {
+    refreshBooks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookPage, bookPageSize, searchQuery, categoryFilter, languageFilter, availabilityFilter]);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -330,6 +378,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(mapped));
   };
 
+  const changePassword = async (input: { currentPassword: string; newPassword: string }) => {
+    await usersApi.changePassword(input);
+  };
+
   const toggleFavorite = async (bookId: string) => {
     const validationError = firstError(validateLoan({ bookId }));
     if (validationError) throw new Error(validationError);
@@ -367,15 +419,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const validationError = firstError(validateBook(book));
     if (validationError) throw new Error(validationError);
     const created = await booksApi.create(bookToUpsert(book));
-    setBooks((prev) => [...prev, bookFromBackend(created)]);
+    const finalBook = book.available
+      ? created
+      : await booksApi.updateStatus(created.id, "INACTIVE");
+    setBooks((prev) => [...prev, bookFromBackend(finalBook)]);
   };
 
   const updateBook = async (bookId: string, updates: Partial<Book>) => {
     const current = books.find((book) => book.id === bookId);
     if (!current) return;
 
-    if (updates.available === false && Object.keys(updates).length === 1) {
-      const updated = await booksApi.deactivate(bookId);
+    if (updates.available !== undefined && Object.keys(updates).length === 1) {
+      const updated = await booksApi.updateStatus(bookId, updates.available ? "ACTIVE" : "INACTIVE");
       const mapped = bookFromBackend(updated);
       setBooks((prev) => prev.map((book) => (book.id === bookId ? mapped : book)));
       return;
@@ -385,7 +440,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const validationError = firstError(validateBook(nextBook));
     if (validationError) throw new Error(validationError);
     const updated = await booksApi.update(bookId, bookToUpsert(nextBook));
-    const mapped = bookFromBackend(updated);
+    const finalBook =
+      updates.available === undefined || updates.available === current.available
+        ? updated
+        : await booksApi.updateStatus(bookId, updates.available ? "ACTIVE" : "INACTIVE");
+    const mapped = bookFromBackend(finalBook);
     setBooks((prev) => prev.map((book) => (book.id === bookId ? mapped : book)));
   };
 
@@ -450,6 +509,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const updateSearchQuery = (query: string) => {
+    setSearchQuery(query);
+    setBookPage(0);
+  };
+
+  const updateCategoryFilter = (category: string) => {
+    setCategoryFilter(category);
+    setBookPage(0);
+  };
+
+  const updateLanguageFilter = (language: string) => {
+    setLanguageFilter(language);
+    setBookPage(0);
+  };
+
+  const updateRatingFilter = (rating: string) => {
+    setRatingFilter(rating);
+    setBookPage(0);
+  };
+
+  const updateAvailabilityFilter = (availability: string) => {
+    setAvailabilityFilter(availability);
+    setBookPage(0);
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -458,6 +542,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         reviews,
         loans,
         favorites,
+        booksLoading,
+        bookPage,
+        bookPageSize,
+        bookTotalElements,
+        bookTotalPages,
         searchQuery,
         categoryFilter,
         languageFilter,
@@ -478,11 +567,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         refreshAdminReviews,
         refreshLoans,
         updateProfile,
-        setSearchQuery,
-        setCategoryFilter,
-        setLanguageFilter,
-        setRatingFilter,
-        setAvailabilityFilter,
+        changePassword,
+        setSearchQuery: updateSearchQuery,
+        setCategoryFilter: updateCategoryFilter,
+        setLanguageFilter: updateLanguageFilter,
+        setRatingFilter: updateRatingFilter,
+        setAvailabilityFilter: updateAvailabilityFilter,
+        setBookPage,
         toggleFavorite,
         addReview,
         deleteReview,

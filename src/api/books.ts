@@ -40,10 +40,14 @@ export interface Page<T> {
 }
 
 export interface ListBooksParams {
+  search?: string;
   title?: string;
   category?: string;
+  language?: string;
+  status?: string;
   page?: number;
   size?: number;
+  sort?: string;
 }
 
 export const booksApi = {
@@ -63,7 +67,7 @@ export const booksApi = {
     return http<BookResponse>(`/books/${id}`, { method: "PUT", body: payload });
   },
 
-  deactivate(id: string | number): Promise<BookResponse> {
-    return http<BookResponse>(`/books/${id}/status`, { method: "PATCH" });
+  updateStatus(id: string | number, status: "ACTIVE" | "INACTIVE"): Promise<BookResponse> {
+    return http<BookResponse>(`/books/${id}/status`, { method: "PATCH", query: { status } });
   },
 };
