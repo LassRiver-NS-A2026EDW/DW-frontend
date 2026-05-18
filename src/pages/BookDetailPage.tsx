@@ -12,6 +12,7 @@ import { BookDetailSkeleton } from "../components/LoadingSkeleton";
 import { EmptyState } from "../components/EmptyState";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { AuthRequiredDialog } from "../components/AuthRequiredDialog";
+import { firstError, validateLoan, validateReview } from "../utils/validation";
 
 export function BookDetail() {
   const {
@@ -21,6 +22,7 @@ export function BookDetail() {
     currentUser,
     toggleFavorite,
     addReview,
+    addLoan,
     deleteReview,
     setCurrentView,
   } = useApp();
@@ -45,7 +47,7 @@ export function BookDetail() {
     setAuthDialogOpen(true);
   };
 
-  const handleSubmitReview = () => {
+  const handleSubmitReview = async () => {
     if (!currentUser) {
       requireAuth("escribir una reseña");
       return;
@@ -54,21 +56,36 @@ export function BookDetail() {
       toast.error("Por favor escribe un comentario");
       return;
     }
-    if (comment.length > 500) {
-      toast.error("El comentario no puede superar los 500 caracteres");
+    if (comment.length > 2000) {
+      toast.error("El comentario no puede superar los 2000 caracteres");
       return;
     }
-    addReview({
-      bookId: selectedBook.id,
-      userId: currentUser.id,
-      userName: currentUser.name,
-      rating,
-      comment,
-      flagged: false,
-    });
-    setComment("");
-    setRating(5);
-    toast.success("Reseña publicada correctamente");
+    const validationError = firstError(
+      validateReview({
+        bookId: selectedBook.id,
+        rating,
+        comment,
+      })
+    );
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+    try {
+      await addReview({
+        bookId: selectedBook.id,
+        userId: currentUser.id,
+        userName: currentUser.name,
+        rating,
+        comment: comment.trim(),
+        flagged: false,
+      });
+      setComment("");
+      setRating(5);
+      toast.success("Resena publicada correctamente");
+    } catch (err: any) {
+      toast.error(err?.message || "No se pudo publicar la resena");
+    }
   };
 
   const confirmDeleteReview = () => {
@@ -79,14 +96,44 @@ export function BookDetail() {
     setConfirmDeleteOpen(false);
   };
 
-  const handleFavoriteToggle = () => {
+  const handleFavoriteToggle = async () => {
     if (!currentUser) {
       requireAuth("agregar libros a favoritos");
       return;
     }
     const isFavorite = favorites.includes(selectedBook.id);
-    toggleFavorite(selectedBook.id);
-    toast.success(isFavorite ? "Removido de favoritos" : "Agregado a favoritos");
+    try {
+      await toggleFavorite(selectedBook.id);
+      toast.success(isFavorite ? "Removido de favoritos" : "Agregado a favoritos");
+    } catch (err: any) {
+      toast.error(err?.message || "No se pudo actualizar favoritos");
+    }
+  };
+
+  const handleReserve = async () => {
+    if (!currentUser) {
+      requireAuth("reservar libros");
+      return;
+    }
+    const validationError = firstError(validateLoan({ bookId: selectedBook.id }));
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+    try {
+      await addLoan({
+        bookId: selectedBook.id,
+        bookTitle: selectedBook.title,
+        userId: currentUser.id,
+        userName: currentUser.name,
+        loanDate: new Date().toISOString().split("T")[0],
+        dueDate: "",
+        status: "active",
+      });
+      toast.success("Libro reservado correctamente");
+    } catch (err: any) {
+      toast.error(err?.message || "No se pudo reservar el libro");
+    }
   };
 
   if (loading) {
@@ -138,6 +185,7 @@ export function BookDetail() {
                   className="w-full"
                   variant="outline"
                   disabled={!selectedBook.available}
+                  onClick={handleReserve}
                 >
                   {selectedBook.available ? "Reservar Libro" : "No Disponible"}
                 </Button>
@@ -232,12 +280,12 @@ export function BookDetail() {
                     </div>
                     <div>
                       <label className="text-sm font-medium mb-2 block">
-                        Tu Reseña ({comment.length}/500)
+                        Tu Reseña ({comment.length}/2000)
                       </label>
                       <Textarea
                         placeholder="Comparte tu opinión sobre este libro..."
                         value={comment}
-                        onChange={(e) => setComment(e.target.value.slice(0, 500))}
+                        onChange={(e) => setComment(e.target.value.slice(0, 2000))}
                         rows={4}
                       />
                     </div>

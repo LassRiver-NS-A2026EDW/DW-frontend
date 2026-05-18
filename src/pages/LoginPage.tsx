@@ -13,6 +13,7 @@ import {
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import logo from "../assets/logo.png";
+import { firstError, validateLogin } from "../utils/validation";
 
 export function Login() {
   const { login, setCurrentView, authLoading } = useApp();
@@ -23,8 +24,9 @@ export function Login() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) {
-      toast.error("Por favor complete todos los campos");
+    const validationError = firstError(validateLogin({ email, password }));
+    if (validationError) {
+      toast.error(validationError);
       return;
     }
     setSubmitting(true);

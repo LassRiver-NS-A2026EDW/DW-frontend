@@ -1,13 +1,33 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { User, Book, Review, Loan, mockBooks, mockReviews, mockLoans } from "../mocks/mockData";
 import { authApi, Gender, LoginResponse } from "../api/auth";
-import { booksApi, BookResponse } from "../api/books";
+import { booksApi, BookResponse, BookUpsertRequest } from "../api/books";
+import { favoritesApi } from "../api/favorites";
+import { reviewsApi, ReviewResponse } from "../api/reviews";
+import { loansApi, LoanResponse } from "../api/loans";
+import { usersApi, UserProfileResponse } from "../api/users";
 import { restoreTokenFromStorage, setAuthToken, getAuthToken } from "../api/http";
+import {
+  firstError,
+  validateBook,
+  validateLoan,
+  validateProfile,
+  validateReview,
+} from "../utils/validation";
 
 const USER_STORAGE_KEY = "lassriver.auth.user";
 
 function mapBackendRole(role: string): User["role"] {
   return role === "ADMIN" ? "admin" : "user";
+}
+
+function userFromBackend(user: UserProfileResponse | LoginResponse, email?: string): User {
+  return {
+    id: String(user.id),
+    name: user.name,
+    email: "email" in user ? user.email : email ?? "",
+    role: mapBackendRole(user.role),
+  };
 }
 
 function bookFromBackend(b: BookResponse): Book {
@@ -18,16 +38,64 @@ function bookFromBackend(b: BookResponse): Book {
     isbn: b.isbn,
     category: b.category ?? "General",
     language: b.language ?? "Español",
-    publisher: "—",
-    publishDate: b.createdAt?.slice(0, 10) ?? "",
-    pages: 0,
-    description: "",
+    publisher: b.publisher ?? "Sin editorial",
+    publishDate: b.publishDate ?? b.createdAt?.slice(0, 10) ?? "",
+    pages: b.pages ?? 0,
+    description: b.description ?? "Sin descripción disponible.",
     coverUrl:
       b.coverUrl ||
       "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400&h=600&fit=crop",
-    rating: 0,
+    rating: b.rating ?? 0,
     available: (b.status ?? "ACTIVE").toUpperCase() === "ACTIVE",
-    reviewCount: 0,
+    reviewCount: b.reviewCount ?? 0,
+  };
+}
+
+function bookToUpsert(book: Omit<Book, "id"> | Book): BookUpsertRequest {
+  return {
+    title: book.title,
+    author: book.author,
+    isbn: book.isbn,
+    category: book.category,
+    language: book.language,
+    coverUrl: book.coverUrl,
+    publisher: book.publisher,
+    publishDate: book.publishDate || null,
+    pages: book.pages || null,
+    description: book.description,
+  };
+}
+
+function reviewFromBackend(r: ReviewResponse): Review {
+  return {
+    id: String(r.id),
+    bookId: String(r.bookId),
+    userId: String(r.userId),
+    userName: r.userName || r.userEmail,
+    rating: r.rating,
+    comment: r.comment,
+    date: r.createdAt?.slice(0, 10) ?? "",
+    flagged: r.status?.toUpperCase() === "HIDDEN",
+    flagReason: r.status,
+  };
+}
+
+function loanFromBackend(l: LoanResponse): Loan {
+  const loanDate = l.loanDate?.slice(0, 10) ?? "";
+  const dueDate = loanDate
+    ? new Date(new Date(loanDate).getTime() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+    : "";
+
+  return {
+    id: String(l.id),
+    bookId: String(l.bookId),
+    bookTitle: l.bookTitle,
+    userId: String(l.userId),
+    userName: l.userEmail,
+    loanDate,
+    dueDate,
+    returnDate: l.returnedAt?.slice(0, 10),
+    status: l.status?.toUpperCase() === "RETURNED" ? "returned" : "active",
   };
 }
 
@@ -58,22 +126,26 @@ interface AppContextType {
   }) => Promise<boolean>;
   logout: () => Promise<void>;
   refreshBooks: () => Promise<void>;
-  updateProfile: (user: Partial<User>) => void;
+  refreshFavorites: () => Promise<void>;
+  refreshReviewsForBook: (bookId: string) => Promise<void>;
+  refreshAdminReviews: () => Promise<void>;
+  refreshLoans: () => Promise<void>;
+  updateProfile: (user: Partial<User>) => Promise<void>;
   setSearchQuery: (query: string) => void;
   setCategoryFilter: (category: string) => void;
   setLanguageFilter: (language: string) => void;
   setRatingFilter: (rating: string) => void;
   setAvailabilityFilter: (availability: string) => void;
-  toggleFavorite: (bookId: string) => void;
-  addReview: (review: Omit<Review, "id" | "date">) => void;
+  toggleFavorite: (bookId: string) => Promise<void>;
+  addReview: (review: Omit<Review, "id" | "date">) => Promise<void>;
   deleteReview: (reviewId: string) => void;
-  addBook: (book: Omit<Book, "id">) => void;
-  updateBook: (bookId: string, updates: Partial<Book>) => void;
+  addBook: (book: Omit<Book, "id">) => Promise<void>;
+  updateBook: (bookId: string, updates: Partial<Book>) => Promise<void>;
   deleteBook: (bookId: string) => void;
-  addLoan: (loan: Omit<Loan, "id">) => void;
-  updateLoan: (loanId: string, updates: Partial<Loan>) => void;
+  addLoan: (loan: Omit<Loan, "id">) => Promise<void>;
+  updateLoan: (loanId: string, updates: Partial<Loan>) => Promise<void>;
   flagReview: (reviewId: string, reason: string) => void;
-  unflagReview: (reviewId: string) => void;
+  unflagReview: (reviewId: string) => Promise<void>;
   setCurrentView: (view: string) => void;
   setSelectedBook: (book: Book | null) => void;
   toggleSidebar: () => void;
@@ -94,30 +166,82 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [ratingFilter, setRatingFilter] = useState("all");
   const [availabilityFilter, setAvailabilityFilter] = useState("all");
   const [currentView, setCurrentView] = useState("home");
-  const [selectedBook, setSelectedBook] = useState<Book | null>(null);
+  const [selectedBook, setSelectedBookState] = useState<Book | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
   const refreshBooks = async () => {
-    if (!getAuthToken()) return;
     try {
       const page = await booksApi.list({ size: 100 });
-      setBooks(page.content.map(bookFromBackend));
+      const mapped = page.content.map(bookFromBackend);
+      setBooks(mapped);
+      setSelectedBookState((current) =>
+        current ? mapped.find((book) => book.id === current.id) ?? current : current
+      );
     } catch (err) {
       console.warn("[AppContext] No se pudieron cargar libros del backend:", err);
+    }
+  };
+
+  const refreshFavorites = async () => {
+    if (!getAuthToken()) return;
+    try {
+      const data = await favoritesApi.list();
+      setFavorites(data.map((favorite) => String(favorite.bookId)));
+    } catch (err) {
+      console.warn("[AppContext] No se pudieron cargar favoritos:", err);
+    }
+  };
+
+  const refreshReviewsForBook = async (bookId: string) => {
+    try {
+      const data = await reviewsApi.byBook(bookId);
+      const mapped = data.map(reviewFromBackend);
+      setReviews((prev) => [
+        ...prev.filter((review) => review.bookId !== bookId),
+        ...mapped,
+      ]);
+    } catch (err) {
+      console.warn("[AppContext] No se pudieron cargar reseñas:", err);
+    }
+  };
+
+  const refreshAdminReviews = async () => {
+    if (currentUser?.role !== "admin") return;
+    try {
+      const data = await reviewsApi.list("VISIBLE");
+      setReviews(
+        data.map((review) => ({
+          ...reviewFromBackend(review),
+          flagged: true,
+          flagReason: "Pendiente de moderación",
+        }))
+      );
+    } catch (err) {
+      console.warn("[AppContext] No se pudieron cargar reseñas para moderación:", err);
+    }
+  };
+
+  const refreshLoans = async () => {
+    if (!getAuthToken()) return;
+    try {
+      const data = currentUser?.role === "admin" ? await loansApi.listAll() : await loansApi.listMine();
+      setLoans(data.map(loanFromBackend));
+    } catch (err) {
+      console.warn("[AppContext] No se pudieron cargar préstamos:", err);
     }
   };
 
   useEffect(() => {
     const token = restoreTokenFromStorage();
     const storedUser = localStorage.getItem(USER_STORAGE_KEY);
+    refreshBooks();
     if (token && storedUser) {
       try {
         const parsed = JSON.parse(storedUser) as User;
         setCurrentUser(parsed);
-        refreshBooks();
       } catch {
         localStorage.removeItem(USER_STORAGE_KEY);
         setAuthToken(null);
@@ -126,13 +250,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (!currentUser) return;
+    refreshFavorites();
+    refreshLoans();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id, currentUser?.role]);
+
   const persistSession = (res: LoginResponse, email: string) => {
-    const user: User = {
-      id: String(res.id),
-      name: res.name,
-      email,
-      role: mapBackendRole(res.role),
-    };
+    const user = userFromBackend(res, email);
     setCurrentUser(user);
     localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
   };
@@ -146,8 +272,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await refreshBooks();
       return true;
     } catch (err: any) {
-      const msg = err?.message || "No se pudo iniciar sesión";
-      setAuthError(msg);
+      setAuthError(err?.message || "No se pudo iniciar sesión");
       return false;
     } finally {
       setAuthLoading(false);
@@ -165,11 +290,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setAuthError(null);
     try {
       await authApi.register(input);
-      const ok = await login(input.email, input.password);
-      return ok;
+      return await login(input.email, input.password);
     } catch (err: any) {
-      const msg = err?.message || "No se pudo registrar la cuenta";
-      setAuthError(msg);
+      setAuthError(err?.message || "No se pudo registrar la cuenta");
       return false;
     } finally {
       setAuthLoading(false);
@@ -184,37 +307,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     localStorage.removeItem(USER_STORAGE_KEY);
     setCurrentUser(null);
-    setBooks(mockBooks);
+    setFavorites([]);
+    setLoans([]);
     setCurrentView("home");
+    await refreshBooks();
   };
 
-  const updateProfile = (updates: Partial<User>) => {
-    if (currentUser) {
-      setCurrentUser({ ...currentUser, ...updates });
-    }
-  };
-
-  const toggleFavorite = (bookId: string) => {
-    setFavorites((prev) =>
-      prev.includes(bookId) ? prev.filter((id) => id !== bookId) : [...prev, bookId]
-    );
-  };
-
-  const addReview = (review: Omit<Review, "id" | "date">) => {
-    const newReview: Review = {
-      ...review,
-      id: `r${Date.now()}`,
-      date: new Date().toISOString().split("T")[0],
-      flagged: false,
+  const updateProfile = async (updates: Partial<User>) => {
+    if (!currentUser) return;
+    const payload = {
+      name: updates.name ?? currentUser.name,
+      email: updates.email ?? currentUser.email,
     };
-    setReviews((prev) => [...prev, newReview]);
-    setBooks((prev) =>
-      prev.map((book) =>
-        book.id === review.bookId
-          ? { ...book, reviewCount: book.reviewCount + 1 }
-          : book
-      )
+    const validationError = firstError(validateProfile(payload));
+    if (validationError) throw new Error(validationError);
+    const next = await usersApi.updateMe({
+      name: payload.name.trim(),
+      email: payload.email.trim(),
+    });
+    const mapped = userFromBackend(next);
+    setCurrentUser(mapped);
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(mapped));
+  };
+
+  const toggleFavorite = async (bookId: string) => {
+    const validationError = firstError(validateLoan({ bookId }));
+    if (validationError) throw new Error(validationError);
+    const res = await favoritesApi.toggle(bookId);
+    setFavorites((prev) =>
+      res.favorite ? [...new Set([...prev, String(res.bookId)])] : prev.filter((id) => id !== String(res.bookId))
     );
+  };
+
+  const addReview = async (review: Omit<Review, "id" | "date">) => {
+    const validationError = firstError(validateReview(review));
+    if (validationError) throw new Error(validationError);
+    const created = await reviewsApi.create({
+      bookId: Number(review.bookId),
+      rating: review.rating,
+      comment: review.comment.trim(),
+    });
+    setReviews((prev) => [...prev.filter((r) => r.id !== String(created.id)), reviewFromBackend(created)]);
+    await refreshBooks();
   };
 
   const deleteReview = (reviewId: string) => {
@@ -223,51 +357,58 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setReviews((prev) => prev.filter((r) => r.id !== reviewId));
       setBooks((prev) =>
         prev.map((book) =>
-          book.id === review.bookId
-            ? { ...book, reviewCount: Math.max(0, book.reviewCount - 1) }
-            : book
+          book.id === review.bookId ? { ...book, reviewCount: Math.max(0, book.reviewCount - 1) } : book
         )
       );
     }
   };
 
-  const addBook = (book: Omit<Book, "id">) => {
-    const newBook: Book = {
-      ...book,
-      id: `b${Date.now()}`,
-    };
-    setBooks((prev) => [...prev, newBook]);
+  const addBook = async (book: Omit<Book, "id">) => {
+    const validationError = firstError(validateBook(book));
+    if (validationError) throw new Error(validationError);
+    const created = await booksApi.create(bookToUpsert(book));
+    setBooks((prev) => [...prev, bookFromBackend(created)]);
   };
 
-  const updateBook = (bookId: string, updates: Partial<Book>) => {
-    setBooks((prev) =>
-      prev.map((book) => (book.id === bookId ? { ...book, ...updates } : book))
-    );
+  const updateBook = async (bookId: string, updates: Partial<Book>) => {
+    const current = books.find((book) => book.id === bookId);
+    if (!current) return;
+
+    if (updates.available === false && Object.keys(updates).length === 1) {
+      const updated = await booksApi.deactivate(bookId);
+      const mapped = bookFromBackend(updated);
+      setBooks((prev) => prev.map((book) => (book.id === bookId ? mapped : book)));
+      return;
+    }
+
+    const nextBook = { ...current, ...updates };
+    const validationError = firstError(validateBook(nextBook));
+    if (validationError) throw new Error(validationError);
+    const updated = await booksApi.update(bookId, bookToUpsert(nextBook));
+    const mapped = bookFromBackend(updated);
+    setBooks((prev) => prev.map((book) => (book.id === bookId ? mapped : book)));
   };
 
   const deleteBook = (bookId: string) => {
     setBooks((prev) => prev.filter((book) => book.id !== bookId));
   };
 
-  const addLoan = (loan: Omit<Loan, "id">) => {
-    const newLoan: Loan = {
-      ...loan,
-      id: `l${Date.now()}`,
-    };
-    setLoans((prev) => [...prev, newLoan]);
-    updateBook(loan.bookId, { available: false });
+  const addLoan = async (loan: Omit<Loan, "id">) => {
+    const validationError = firstError(validateLoan(loan));
+    if (validationError) throw new Error(validationError);
+    const created = await loansApi.create(loan.bookId);
+    setLoans((prev) => [loanFromBackend(created), ...prev]);
+    await refreshBooks();
   };
 
-  const updateLoan = (loanId: string, updates: Partial<Loan>) => {
-    setLoans((prev) =>
-      prev.map((loan) => (loan.id === loanId ? { ...loan, ...updates } : loan))
-    );
+  const updateLoan = async (loanId: string, updates: Partial<Loan>) => {
     if (updates.status === "returned") {
-      const loan = loans.find((l) => l.id === loanId);
-      if (loan) {
-        updateBook(loan.bookId, { available: true });
-      }
+      const updated = await loansApi.returnLoan(loanId);
+      setLoans((prev) => prev.map((loan) => (loan.id === loanId ? loanFromBackend(updated) : loan)));
+      await refreshBooks();
+      return;
     }
+    setLoans((prev) => prev.map((loan) => (loan.id === loanId ? { ...loan, ...updates } : loan)));
   };
 
   const flagReview = (reviewId: string, reason: string) => {
@@ -278,12 +419,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     );
   };
 
-  const unflagReview = (reviewId: string) => {
+  const unflagReview = async (reviewId: string) => {
+    const hidden = await reviewsApi.hide(reviewId);
     setReviews((prev) =>
-      prev.map((review) =>
-        review.id === reviewId ? { ...review, flagged: false, flagReason: undefined } : review
-      )
+      prev.map((review) => (review.id === reviewId ? reviewFromBackend(hidden) : review))
     );
+  };
+
+  const setSelectedBook = (book: Book | null) => {
+    setSelectedBookState(book);
+    if (book) {
+      booksApi.get(book.id).then((fresh) => setSelectedBookState(bookFromBackend(fresh))).catch(() => undefined);
+      refreshReviewsForBook(book.id);
+    }
   };
 
   const toggleSidebar = () => {
@@ -325,6 +473,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         register,
         logout,
         refreshBooks,
+        refreshFavorites,
+        refreshReviewsForBook,
+        refreshAdminReviews,
+        refreshLoans,
         updateProfile,
         setSearchQuery,
         setCategoryFilter,

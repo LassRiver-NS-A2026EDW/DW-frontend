@@ -33,9 +33,13 @@ export function Favorites() {
 
   const favoriteBooks = books.filter((book) => favorites.includes(book.id));
 
-  const handleFavoriteToggle = (bookId: string) => {
-    toggleFavorite(bookId);
-    toast.success("Removido de favoritos");
+  const handleFavoriteToggle = async (bookId: string) => {
+    try {
+      await toggleFavorite(bookId);
+      toast.success("Removido de favoritos");
+    } catch (err: any) {
+      toast.error(err?.message || "No se pudo actualizar favoritos");
+    }
   };
 
   const handleBookClick = (book: any) => {

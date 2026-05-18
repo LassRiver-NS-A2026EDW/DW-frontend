@@ -76,6 +76,10 @@ export async function http<T = unknown>(path: string, options: HttpOptions = {})
   const payload = isJson ? await res.json().catch(() => null) : await res.text().catch(() => "");
 
   if (!res.ok) {
+    if (res.status === 401) {
+      setAuthToken(null);
+      localStorage.removeItem("lassriver.auth.user");
+    }
     const err = new Error(
       (payload && typeof payload === "object" && "message" in payload && (payload as any).message) ||
         res.statusText ||

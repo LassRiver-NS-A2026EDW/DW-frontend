@@ -25,12 +25,13 @@ import {
 } from "../components/PasswordStrength";
 import { Gender } from "../api/auth";
 import logo from "../assets/logo.png";
+import { firstError, validateRegister, yesterdayLocalIso } from "../utils/validation";
 
 const GENDERS: { value: Gender; label: string }[] = [
-  { value: "FEMALE", label: "Femenino" },
-  { value: "MALE", label: "Masculino" },
+  { value: "F", label: "Femenino" },
+  { value: "M", label: "Masculino" },
   { value: "OTHER", label: "Otro" },
-  { value: "N_R", label: "Prefiero no decir" },
+  { value: "NR", label: "Prefiero no decir" },
 ];
 
 export function Register() {
@@ -39,7 +40,7 @@ export function Register() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [gender, setGender] = useState<Gender>("N_R");
+  const [gender, setGender] = useState<Gender>("NR");
   const [birthDate, setBirthDate] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -49,7 +50,7 @@ export function Register() {
   const passwordsMismatch = confirmPassword.length > 0 && password !== confirmPassword;
   const strong = useMemo(() => isPasswordStrong(password), [password]);
 
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const maxBirthDate = yesterdayLocalIso();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,6 +64,21 @@ export function Register() {
     }
     if (!passwordsMatch) {
       toast.error("Las contraseñas no coinciden");
+      return;
+    }
+    const validationError = firstError(
+      validateRegister({
+        name,
+        email,
+        password,
+        confirmPassword,
+        gender,
+        birthDate,
+        passwordIsStrong: strong,
+      })
+    );
+    if (validationError) {
+      toast.error(validationError);
       return;
     }
     setSubmitting(true);
@@ -159,7 +175,7 @@ export function Register() {
                   <Input
                     id="birthDate"
                     type="date"
-                    max={todayIso}
+                    max={maxBirthDate}
                     value={birthDate}
                     onChange={(e) => setBirthDate(e.target.value)}
                     disabled={busy}

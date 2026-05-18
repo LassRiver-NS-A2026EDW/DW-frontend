@@ -1,5 +1,5 @@
 import { useApp } from "../context/AppContext";
-import { Home, BookOpen, Heart, MessageSquare, User, LayoutDashboard, Menu } from "lucide-react";
+import { Home, BookOpen, Heart, MessageSquare, User, LayoutDashboard, Menu, Library } from "lucide-react";
 import logo from "../assets/logo.png";
 
 export function Sidebar() {
@@ -9,6 +9,7 @@ export function Sidebar() {
     { id: "home", label: "Inicio", icon: Home, roles: ["all"] },
     { id: "catalog", label: "Catálogo", icon: BookOpen, roles: ["all"] },
     { id: "favorites", label: "Favoritos", icon: Heart, roles: ["user", "librarian", "admin"] },
+    { id: "loans", label: "Préstamos", icon: Library, roles: ["user", "librarian", "admin"] },
     { id: "reviews", label: "Reseñas", icon: MessageSquare, roles: ["user", "librarian", "admin"] },
     { id: "profile", label: "Perfil", icon: User, roles: ["user", "librarian", "admin"] },
     { id: "admin", label: "Administración", icon: LayoutDashboard, roles: ["admin", "librarian"] },

@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { EmptyState } from "../components/EmptyState";
 import { RoleBadge } from "../components/RoleBadge";
 import { RatingStars } from "../components/RatingStars";
+import { firstError, validateProfile } from "../utils/validation";
 
 export function Profile() {
   const { currentUser, updateProfile, reviews, favorites, setCurrentView } = useApp();
@@ -30,13 +31,18 @@ export function Profile() {
 
   const userReviews = reviews.filter((r) => r.userId === currentUser.id);
 
-  const handleSave = () => {
-    if (!name.trim() || !email.trim()) {
-      toast.error("Por favor complete todos los campos");
+  const handleSave = async () => {
+    const validationError = firstError(validateProfile({ name, email }));
+    if (validationError) {
+      toast.error(validationError);
       return;
     }
-    updateProfile({ name, email });
-    toast.success("Perfil actualizado correctamente");
+    try {
+      await updateProfile({ name, email });
+      toast.success("Perfil actualizado correctamente");
+    } catch (err: any) {
+      toast.error(err?.message || "No se pudo actualizar el perfil");
+    }
   };
 
   return (
@@ -114,7 +120,11 @@ export function Profile() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="correo@ejemplo.com"
+                disabled
               />
+              <p className="text-xs text-muted-foreground">
+                El cambio de correo requiere reautenticacion y no esta disponible en esta fase.
+              </p>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium flex items-center gap-2">

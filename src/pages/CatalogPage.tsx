@@ -57,14 +57,18 @@ export function Catalog() {
   const categories = ["all", ...Array.from(new Set(books.map((b) => b.category)))];
   const languages = ["all", ...Array.from(new Set(books.map((b) => b.language)))];
 
-  const handleFavoriteToggle = (bookId: string) => {
+  const handleFavoriteToggle = async (bookId: string) => {
     if (!currentUser) {
       setAuthDialogOpen(true);
       return;
     }
     const isFavorite = favorites.includes(bookId);
-    toggleFavorite(bookId);
-    toast.success(isFavorite ? "Removido de favoritos" : "Agregado a favoritos");
+    try {
+      await toggleFavorite(bookId);
+      toast.success(isFavorite ? "Removido de favoritos" : "Agregado a favoritos");
+    } catch (err: any) {
+      toast.error(err?.message || "No se pudo actualizar favoritos");
+    }
   };
 
   const handleBookClick = (book: any) => {

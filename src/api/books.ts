@@ -9,7 +9,26 @@ export interface BookResponse {
   language: string | null;
   status: string;
   coverUrl: string | null;
+  publisher: string | null;
+  publishDate: string | null;
+  pages: number | null;
+  description: string | null;
+  rating: number | null;
+  reviewCount: number | null;
   createdAt: string;
+}
+
+export interface BookUpsertRequest {
+  title: string;
+  author: string;
+  isbn: string;
+  category?: string | null;
+  language?: string | null;
+  coverUrl?: string | null;
+  publisher?: string | null;
+  publishDate?: string | null;
+  pages?: number | null;
+  description?: string | null;
 }
 
 export interface Page<T> {
@@ -29,6 +48,22 @@ export interface ListBooksParams {
 
 export const booksApi = {
   list(params: ListBooksParams = {}): Promise<Page<BookResponse>> {
-    return http<Page<BookResponse>>("/books", { method: "GET", query: params });
+    return http<Page<BookResponse>>("/books", { method: "GET", query: params, auth: false });
+  },
+
+  get(id: string | number): Promise<BookResponse> {
+    return http<BookResponse>(`/books/${id}`, { method: "GET", auth: false });
+  },
+
+  create(payload: BookUpsertRequest): Promise<BookResponse> {
+    return http<BookResponse>("/books", { method: "POST", body: payload });
+  },
+
+  update(id: string | number, payload: BookUpsertRequest): Promise<BookResponse> {
+    return http<BookResponse>(`/books/${id}`, { method: "PUT", body: payload });
+  },
+
+  deactivate(id: string | number): Promise<BookResponse> {
+    return http<BookResponse>(`/books/${id}/status`, { method: "PATCH" });
   },
 };

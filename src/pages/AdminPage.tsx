@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useApp } from "../context/AppContext";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -40,12 +40,22 @@ export function Admin() {
     updateLoan,
     flagReview,
     unflagReview,
+    refreshLoans,
+    refreshAdminReviews,
     setCurrentView,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<"dashboard" | "books" | "loans" | "reviews">("dashboard");
   const [editingBook, setEditingBook] = useState<any>(null);
   const [showAddBook, setShowAddBook] = useState(false);
+
+  useEffect(() => {
+    if (currentUser?.role !== "admin") return;
+    refreshLoans();
+    if (activeTab === "reviews") {
+      refreshAdminReviews();
+    }
+  }, [activeTab, currentUser?.role]);
 
   if (!currentUser || (currentUser.role !== "admin" && currentUser.role !== "librarian")) {
     return (
@@ -187,9 +197,13 @@ export function Admin() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => {
-                              updateBook(book.id, { available: !book.available });
-                              toast.success("Estado actualizado");
+                            onClick={async () => {
+                              try {
+                                await updateBook(book.id, { available: !book.available });
+                                toast.success("Estado actualizado");
+                              } catch (err: any) {
+                                toast.error(err?.message || "No se pudo actualizar el estado");
+                              }
                             }}
                           >
                             {book.available ? (
@@ -242,12 +256,16 @@ export function Admin() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => {
-                              updateLoan(loan.id, {
+                            onClick={async () => {
+                              try {
+                                await updateLoan(loan.id, {
                                 status: "returned",
                                 returnDate: new Date().toISOString().split("T")[0],
                               });
-                              toast.success("Préstamo marcado como devuelto");
+                                toast.success("Prestamo marcado como devuelto");
+                              } catch (err: any) {
+                                toast.error(err?.message || "No se pudo marcar el prestamo como devuelto");
+                              }
                             }}
                           >
                             Marcar Devuelto

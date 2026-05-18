@@ -8,6 +8,7 @@ import { Home } from "./pages/HomePage";
 import { Catalog } from "./pages/CatalogPage";
 import { BookDetail } from "./pages/BookDetailPage";
 import { Favorites } from "./pages/FavoritesPage";
+import { Loans } from "./pages/LoansPage";
 import { Reviews } from "./pages/ReviewsPage";
 import { Profile } from "./pages/ProfilePage";
 import { Admin } from "./pages/AdminPage";
@@ -37,6 +38,7 @@ function AppContent() {
         {currentView === "catalog" && <Catalog />}
         {currentView === "book-detail" && <BookDetail />}
         {currentView === "favorites" && <Favorites />}
+        {currentView === "loans" && <Loans />}
         {currentView === "reviews" && <Reviews />}
         {currentView === "profile" && <Profile />}
         {currentView === "admin" && <Admin />}
