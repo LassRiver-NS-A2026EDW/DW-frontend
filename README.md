@@ -112,7 +112,7 @@ pnpm install
 # Variables de entorno (crear .env)
 VITE_API_BASE_URL=https://api.lassriver.com
 
-# Modo desarrollo (ya corriendo en Figma Make)
+# Modo desarrollo local
 npm run dev
 
 # Build para producción

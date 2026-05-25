@@ -1,5 +1,6 @@
 {
-  "name": "@figma/my-make-file",
+  "name": "bookworm-frontend",
+  "description": "BookWorm digital library frontend built with React, Vite, and TypeScript.",
   "private": true,
   "version": "0.0.1",
   "type": "module",
