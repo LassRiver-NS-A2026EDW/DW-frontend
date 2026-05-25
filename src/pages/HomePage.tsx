@@ -1,169 +1,147 @@
 import { useApp } from "../context/AppContext";
-import { Button } from "../components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
-import { Badge } from "../components/ui/badge";
-import { BookOpen, Users, Star, TrendingUp } from "lucide-react";
-import logo from "../assets/logo.png";
+import { BookOpen, Star, TrendingUp, Users } from "lucide-react";
 
 export function Home() {
-  const { books, currentUser, setCurrentView } = useApp();
+  const { books, currentUser, setCurrentView, setSelectedBook } = useApp();
 
   const featuredBooks = books.filter((b) => b.rating >= 4.7).slice(0, 6);
-  const recentBooks = books.slice(0, 6);
+  const categories = Array.from(new Set(books.map((b) => b.category))).filter(Boolean);
   const stats = {
     totalBooks: books.length,
     availableBooks: books.filter((b) => b.available).length,
-    categories: new Set(books.map((b) => b.category)).size,
-    avgRating: (books.reduce((acc, b) => acc + b.rating, 0) / books.length).toFixed(1),
+    categories: categories.length,
+    avgRating: books.length > 0 ? (books.reduce((acc, book) => acc + book.rating, 0) / books.length).toFixed(1) : "0.0",
   };
 
+  const openBook = (book: (typeof books)[number]) => {
+    setSelectedBook(book);
+    setCurrentView("book-detail");
+  };
+
+  const statItems = [
+    { label: "Titulos", value: stats.totalBooks, icon: BookOpen, color: "var(--primary)" },
+    { label: "Rating", value: stats.avgRating, icon: Star, color: "#f59e0b" },
+    { label: "Generos", value: stats.categories, icon: Users, color: "var(--accent)" },
+    { label: "Disponibles", value: stats.availableBooks, icon: TrendingUp, color: "var(--river-cyan)" },
+  ];
+
   return (
-    <div className="flex-1 overflow-auto">
-      <div className="relative h-96 bg-gradient-to-br from-primary via-secondary to-accent flex items-center justify-center text-white overflow-hidden">
-        <div className="absolute inset-0 bg-black/20"></div>
-        {/* Patrón de ondas en el hero */}
-        <div className="absolute inset-0 opacity-10">
-          <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <pattern id="hero-waves" x="0" y="0" width="200" height="200" patternUnits="userSpaceOnUse">
-                <path d="M0 100 Q 50 50, 100 100 T 200 100" stroke="white" strokeWidth="2" fill="none"/>
-                <path d="M0 120 Q 50 70, 100 120 T 200 120" stroke="white" strokeWidth="2" fill="none"/>
-                <path d="M0 140 Q 50 90, 100 140 T 200 140" stroke="white" strokeWidth="1.5" fill="none"/>
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#hero-waves)" />
-          </svg>
-        </div>
-        <div className="relative z-10 text-center px-6 max-w-4xl">
-          <img
-            src={logo}
-            alt="LassRiver NS"
-            className="h-28 mx-auto mb-8 drop-shadow-2xl transition-transform duration-500 ease-out hover:scale-105"
-          />
-          <h1 className="text-5xl md:text-6xl font-bold mb-4 drop-shadow-lg">Bienvenido a LassRiver NS</h1>
-          <p className="text-xl md:text-2xl mb-8 opacity-95 drop-shadow">
-            Tu biblioteca digital premium con la mejor colección de literatura en español
-          </p>
-          {!currentUser ? (
-            <div className="flex gap-4 justify-center">
-              <Button size="lg" variant="secondary" onClick={() => setCurrentView("login")}>
-                Iniciar Sesión
-              </Button>
-              <Button size="lg" variant="outline" onClick={() => setCurrentView("register")} className="bg-white/10 backdrop-blur-sm border-white/30 text-white hover:bg-white/20">
-                Registrarse
-              </Button>
+    <div className="flex-1 overflow-auto custom-scroll mesh-bg min-h-screen transition-colors duration-500">
+      <section className="relative pt-24 pb-32 px-6 lg:px-12 overflow-hidden">
+        <div className="max-w-7xl mx-auto grid lg:grid-cols-12 gap-12 items-center">
+          <div className="lg:col-span-7 space-y-8 animate-in" style={{ animationDelay: "0.1s" }}>
+            <div className="flex items-center gap-3">
+              <span className="h-px w-12 bg-primary" />
+              <span className="text-primary uppercase tracking-[0.4em] text-[10px] font-black">LassRiver NS</span>
             </div>
-          ) : (
-            <Button size="lg" variant="secondary" onClick={() => setCurrentView("catalog")}>
-              Explorar Catálogo
-            </Button>
-          )}
-        </div>
-      </div>
 
-      <div className="p-6 space-y-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card>
-            <CardContent className="p-6 flex items-center gap-4">
-              <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                <BookOpen className="h-6 w-6 text-primary" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{stats.totalBooks}</p>
-                <p className="text-sm text-muted-foreground">Libros Totales</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-6 flex items-center gap-4">
-              <div className="h-12 w-12 rounded-lg bg-accent/10 flex items-center justify-center">
-                <TrendingUp className="h-6 w-6 text-accent" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{stats.availableBooks}</p>
-                <p className="text-sm text-muted-foreground">Disponibles</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-6 flex items-center gap-4">
-              <div className="h-12 w-12 rounded-lg bg-secondary/10 flex items-center justify-center">
-                <Users className="h-6 w-6 text-secondary" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{stats.categories}</p>
-                <p className="text-sm text-muted-foreground">Categorías</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-6 flex items-center gap-4">
-              <div className="h-12 w-12 rounded-lg bg-yellow-500/10 flex items-center justify-center">
-                <Star className="h-6 w-6 text-yellow-500" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{stats.avgRating}</p>
-                <p className="text-sm text-muted-foreground">Rating Promedio</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+            <h1 className="text-7xl lg:text-9xl font-black tracking-tighter text-reveal leading-[0.85]">
+              Lee el <br />
+              <span className="text-primary italic">Futuro.</span>
+            </h1>
 
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-bold">Libros Destacados</h2>
-            <Button variant="ghost" onClick={() => setCurrentView("catalog")}>
-              Ver todos
-            </Button>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-            {featuredBooks.map((book) => (
-              <Card
-                key={book.id}
-                className="overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group"
+            <p className="text-muted-foreground text-lg max-w-lg leading-relaxed font-light">
+              No es solo una biblioteca. Es un ecosistema digital disenado para la nueva era de la literatura.{" "}
+              <span className="text-foreground font-medium">Contenido curado, experiencia inmersiva.</span>
+            </p>
+
+            <div className="flex flex-wrap gap-6 pt-4">
+              <button
                 onClick={() => setCurrentView("catalog")}
+                className="group h-16 px-10 bg-primary text-primary-foreground font-bold rounded-full flex items-center gap-3 transition-all hover:scale-105 hover:shadow-[0_0_30px_rgba(24,152,168,0.4)]"
               >
-                <div className="aspect-[3/4] bg-muted overflow-hidden">
-                  <img
-                    src={book.coverUrl}
-                    alt={book.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
-                </div>
-                <CardContent className="p-3">
-                  <h3 className="font-medium text-sm line-clamp-1">{book.title}</h3>
-                  <p className="text-xs text-muted-foreground line-clamp-1">{book.author}</p>
-                  <div className="flex items-center gap-1 mt-2">
-                    <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                    <span className="text-xs font-medium">{book.rating.toFixed(1)}</span>
+                <span>Comenzar Lectura</span>
+                <TrendingUp className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
+              </button>
+
+              {!currentUser && (
+                <button
+                  onClick={() => setCurrentView("register")}
+                  className="h-16 px-10 rounded-full border border-border text-foreground font-bold hover:bg-accent/10 transition-all backdrop-blur-md"
+                >
+                  Registrarse
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="lg:col-span-5 grid grid-cols-2 gap-4 animate-in" style={{ animationDelay: "0.3s" }}>
+            {statItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <div key={item.label} className="glass-stat p-8 rounded-[2.5rem] flex flex-col justify-between aspect-square">
+                  <div
+                    className="h-12 w-12 rounded-2xl flex items-center justify-center"
+                    style={{ background: `${item.color}10`, color: item.color }}
+                  >
+                    <Icon className="h-6 w-6" />
                   </div>
-                </CardContent>
-              </Card>
+                  <div>
+                    <div className="text-4xl font-bold text-foreground tracking-tighter mb-1">{item.value}</div>
+                    <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">{item.label}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <div className="max-w-7xl mx-auto px-6 lg:px-12 pb-24">
+        <section className="animate-in" style={{ animationDelay: "0.5s" }}>
+          <div className="flex items-end justify-between mb-16">
+            <div>
+              <h2 className="text-4xl font-black text-foreground tracking-tighter italic">Seleccion Editorial</h2>
+              <div className="h-1 w-20 bg-accent mt-4" />
+            </div>
+            <button
+              onClick={() => setCurrentView("catalog")}
+              className="text-xs font-black tracking-widest text-primary hover:text-accent transition-colors"
+            >
+              EXPLORAR TODO
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-x-8 gap-y-16">
+            {featuredBooks.map((book) => (
+              <button key={book.id} className="group cursor-pointer text-left" onClick={() => openBook(book)}>
+                <div className="relative mb-6">
+                  <div className="absolute -inset-2 bg-primary/20 rounded-[2rem] blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                  <div className="relative aspect-[2/3] rounded-[1.8rem] overflow-hidden shadow-2xl transition-transform duration-500 group-hover:-translate-y-4">
+                    <img
+                      src={book.coverUrl}
+                      alt={book.title}
+                      className="w-full h-full object-cover grayscale-[20%] group-hover:grayscale-0 transition-all duration-700"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-6">
+                      <span className="text-white text-[10px] font-bold tracking-widest uppercase">Ver Detalles</span>
+                    </div>
+                  </div>
+                </div>
+                <h3 className="text-foreground font-black text-sm mb-1 line-clamp-1 tracking-tight">{book.title}</h3>
+                <p className="text-muted-foreground text-[10px] uppercase tracking-widest font-bold line-clamp-1">{book.author}</p>
+              </button>
             ))}
           </div>
-        </div>
+        </section>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Categorías Populares</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {Array.from(new Set(books.map((b) => b.category))).map((category) => (
-                <Badge
-                  key={category}
-                  variant="secondary"
-                  className="cursor-pointer hover:bg-secondary/80 hover:scale-105 transition-all duration-200"
-                  onClick={() => {
-                    setCurrentView("catalog");
-                  }}
-                >
-                  {category}
-                </Badge>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <section className="mt-32 p-12 rounded-[3rem] bg-card border border-border animate-in" style={{ animationDelay: "0.6s" }}>
+          <h3 className="text-lg font-bold text-foreground mb-8 flex items-center gap-4">
+            <Users className="h-5 w-5 text-accent" />
+            Explorar por Genero
+          </h3>
+          <div className="flex flex-wrap gap-3">
+            {categories.map((category) => (
+              <button
+                key={category}
+                onClick={() => setCurrentView("catalog")}
+                className="px-8 py-3 rounded-full bg-card border border-border text-muted-foreground text-xs font-bold hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all"
+              >
+                {category}
+              </button>
+            ))}
+          </div>
+        </section>
       </div>
     </div>
   );

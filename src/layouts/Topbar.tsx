@@ -12,6 +12,7 @@ export function Topbar() {
     home: "Inicio",
     catalog: "Catálogo",
     "book-detail": "Detalle del libro",
+    "book-reader": "Lector",
     favorites: "Favoritos",
     loans: "Préstamos",
     reviews: "Reseñas",
@@ -21,7 +22,7 @@ export function Topbar() {
 
   return (
     <>
-    <div className="h-16 bg-card border-b border-border flex items-center justify-between px-6 sticky top-0 z-10 backdrop-blur supports-[backdrop-filter]:bg-card/80">
+    <div className="h-16 min-h-16 shrink-0 bg-card border-b border-border flex items-center justify-between px-6 sticky top-0 z-10 backdrop-blur supports-[backdrop-filter]:bg-card/80">
       <div className="flex items-center gap-3 min-w-0">
         <h2 className="text-lg font-semibold text-foreground truncate">
           {titles[currentView] ?? "LassRiver NS"}

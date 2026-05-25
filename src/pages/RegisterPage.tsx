@@ -35,7 +35,7 @@ const GENDERS: { value: Gender; label: string }[] = [
 ];
 
 export function Register() {
-  const { register, setCurrentView, authLoading } = useApp();
+  const { register, setCurrentView, authLoading, authError } = useApp();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -93,9 +93,9 @@ export function Register() {
       if (ok) {
         toast.success("Cuenta creada correctamente");
         setCurrentView("catalog");
-      } else {
-        toast.error("No se pudo crear la cuenta. Verifica los datos.");
       }
+    } catch (err: any) {
+      toast.error(err?.message || "No se pudo crear la cuenta. Verifica los datos.");
     } finally {
       setSubmitting(false);
     }
@@ -137,6 +137,11 @@ export function Register() {
           </CardHeader>
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
+              {authError && (
+                <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  {authError}
+                </div>
+              )}
               <div className="space-y-2">
                 <label htmlFor="name" className="text-sm font-medium">
                   Nombre Completo
