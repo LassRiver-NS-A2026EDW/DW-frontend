@@ -7,6 +7,7 @@ import { Register } from "./pages/RegisterPage";
 import { Home } from "./pages/HomePage";
 import { Catalog } from "./pages/CatalogPage";
 import { BookDetail } from "./pages/BookDetailPage";
+import { BookReader } from "./pages/BookReaderPage";
 import { Favorites } from "./pages/FavoritesPage";
 import { Loans } from "./pages/LoansPage";
 import { Reviews } from "./pages/ReviewsPage";
@@ -32,11 +33,12 @@ function AppContent() {
   return (
     <div className="h-screen flex bg-background text-foreground overflow-hidden">
       <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Topbar />
+      <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
+        {currentView !== "book-reader" && <Topbar />}
         {currentView === "home" && <Home />}
         {currentView === "catalog" && <Catalog />}
         {currentView === "book-detail" && <BookDetail />}
+        {currentView === "book-reader" && <BookReader />}
         {currentView === "favorites" && <Favorites />}
         {currentView === "loans" && <Loans />}
         {currentView === "reviews" && <Reviews />}

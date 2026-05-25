@@ -54,14 +54,14 @@ interface HttpOptions {
   body?: unknown;
   auth?: boolean;
   signal?: AbortSignal;
-  query?: Record<string, string | number | boolean | undefined | null>;
+  query?: object;
 }
 
-function buildUrl(path: string, query?: HttpOptions["query"]): string {
+export function buildApiUrl(path: string, query?: HttpOptions["query"]): string {
   const url = `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`;
   if (!query) return url;
   const params = new URLSearchParams();
-  for (const [k, v] of Object.entries(query)) {
+  for (const [k, v] of Object.entries(query) as Array<[string, string | number | boolean | undefined | null]>) {
     if (v === undefined || v === null || v === "") continue;
     params.append(k, String(v));
   }
@@ -83,7 +83,7 @@ export async function http<T = unknown>(path: string, options: HttpOptions = {})
     }
   }
 
-  const res = await fetch(buildUrl(path, query), {
+  const res = await fetch(buildApiUrl(path, query), {
     method,
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),

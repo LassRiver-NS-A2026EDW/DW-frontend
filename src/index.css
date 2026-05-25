@@ -198,3 +198,67 @@
     line-height: 1.5;
   }
 }
+
+.custom-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--primary) 35%, transparent) transparent;
+}
+
+.custom-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--primary) 35%, transparent);
+  border-radius: 999px;
+}
+
+.mesh-bg {
+  background-color: var(--background);
+  background-image:
+    radial-gradient(at 0% 0%, color-mix(in srgb, var(--primary) 18%, transparent) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, color-mix(in srgb, var(--accent) 14%, transparent) 0px, transparent 50%);
+}
+
+.text-reveal {
+  background: linear-gradient(
+    to bottom right,
+    var(--foreground) 30%,
+    color-mix(in srgb, var(--foreground) 50%, transparent)
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.glass-stat {
+  background: color-mix(in srgb, var(--card) 18%, transparent);
+  backdrop-filter: blur(20px);
+  border: 1px solid color-mix(in srgb, var(--border) 35%, transparent);
+  transition: all 0.5s cubic-bezier(0.2, 1, 0.3, 1);
+}
+
+.glass-stat:hover {
+  background: color-mix(in srgb, var(--card) 28%, transparent);
+  border-color: var(--primary);
+  transform: translateY(-5px);
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-in {
+  animation: fadeInUp 0.8s ease-out forwards;
+}
