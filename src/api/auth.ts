@@ -1,7 +1,7 @@
 import { http, setAuthToken } from "./http";
 
 export type Gender = "M" | "F" | "OTHER" | "NR";
-export type Role = "USER" | "ADMIN";
+export type Role = "USER" | "LIBRARIAN" | "ADMIN";
 
 export interface LoginRequest {
   email: string;

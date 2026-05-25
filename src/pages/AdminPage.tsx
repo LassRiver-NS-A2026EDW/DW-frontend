@@ -56,9 +56,11 @@ export function Admin() {
     addBook,
     updateBook,
     deleteBook,
+    uploadBookPdf,
+    downloadBookPdf,
     updateLoan,
-    flagReview,
-    unflagReview,
+    hideReview,
+    keepReviewVisible,
     refreshLoans,
     refreshAdminReviews,
     setCurrentView,
@@ -69,6 +71,8 @@ export function Admin() {
   const [showAddBook, setShowAddBook] = useState(false);
   const [bookForm, setBookForm] = useState<Omit<Book, "id">>(blankBookForm);
   const [savingBook, setSavingBook] = useState(false);
+  const [selectedPdfFile, setSelectedPdfFile] = useState<File | null>(null);
+  const [pdfSourceUrl, setPdfSourceUrl] = useState("");
 
   useEffect(() => {
     if (currentUser?.role !== "admin") return;
@@ -106,12 +110,16 @@ export function Admin() {
   const openAddBook = () => {
     setEditingBook(null);
     setBookForm(blankBookForm);
+    setSelectedPdfFile(null);
+    setPdfSourceUrl("");
     setShowAddBook(true);
   };
 
   const openEditBook = (book: Book) => {
     setEditingBook(book);
     setBookForm({ ...book });
+    setSelectedPdfFile(null);
+    setPdfSourceUrl("");
     setShowAddBook(true);
   };
 
@@ -119,6 +127,8 @@ export function Admin() {
     setEditingBook(null);
     setShowAddBook(false);
     setBookForm(blankBookForm);
+    setSelectedPdfFile(null);
+    setPdfSourceUrl("");
   };
 
   const updateBookForm = (field: keyof Omit<Book, "id">, value: string | number | boolean) => {
@@ -131,9 +141,19 @@ export function Admin() {
     try {
       if (editingBook) {
         await updateBook(editingBook.id, bookForm);
+        if (selectedPdfFile) {
+          await uploadBookPdf(editingBook.id, selectedPdfFile);
+        } else if (pdfSourceUrl.trim()) {
+          await downloadBookPdf(editingBook.id, pdfSourceUrl.trim());
+        }
         toast.success("Libro actualizado correctamente");
       } else {
-        await addBook(bookForm);
+        const created = await addBook(bookForm);
+        if (selectedPdfFile) {
+          await uploadBookPdf(created.id, selectedPdfFile);
+        } else if (pdfSourceUrl.trim()) {
+          await downloadBookPdf(created.id, pdfSourceUrl.trim());
+        }
         toast.success("Libro creado correctamente");
       }
       closeBookForm();
@@ -383,8 +403,8 @@ export function Admin() {
                           <Button
                             variant="destructive"
                             size="sm"
-                            onClick={() => {
-                              unflagReview(review.id);
+                            onClick={async () => {
+                              await hideReview(review.id);
                               toast.success("Reseña ocultada");
                             }}
                           >
@@ -393,8 +413,8 @@ export function Admin() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => {
-                              unflagReview(review.id);
+                            onClick={async () => {
+                              await keepReviewVisible(review.id);
                               toast.success("Reseña mantenida visible");
                             }}
                           >
@@ -446,6 +466,26 @@ export function Admin() {
                     onChange={(e) => updateBookForm("description", e.target.value)}
                     rows={4}
                   />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-sm">Archivo PDF</label>
+                      <Input
+                        type="file"
+                        accept="application/pdf,.pdf"
+                        onChange={(event) => setSelectedPdfFile(event.target.files?.[0] ?? null)}
+                      />
+                      <p className="text-xs text-muted-foreground">Tiene prioridad sobre la URL si ambos campos se completan.</p>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm">URL publica de PDF</label>
+                      <Input
+                        type="url"
+                        placeholder="https://ejemplo.com/libro.pdf"
+                        value={pdfSourceUrl}
+                        onChange={(event) => setPdfSourceUrl(event.target.value)}
+                      />
+                    </div>
+                  </div>
                   <label className="flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"

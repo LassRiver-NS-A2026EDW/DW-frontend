@@ -6,7 +6,7 @@ import { favoritesApi } from "../api/favorites";
 import { reviewsApi, ReviewResponse } from "../api/reviews";
 import { loansApi, LoanResponse } from "../api/loans";
 import { usersApi, UserProfileResponse } from "../api/users";
-import { restoreTokenFromStorage, setAuthToken, getAuthToken } from "../api/http";
+import { getApiErrorMessage, restoreTokenFromStorage, setAuthToken, getAuthToken } from "../api/http";
 import {
   firstError,
   validateBook,
@@ -18,7 +18,9 @@ import {
 const USER_STORAGE_KEY = "lassriver.auth.user";
 
 function mapBackendRole(role: string): User["role"] {
-  return role === "ADMIN" ? "admin" : "user";
+  if (role === "ADMIN") return "admin";
+  if (role === "LIBRARIAN") return "librarian";
+  return "user";
 }
 
 function userFromBackend(user: UserProfileResponse | LoginResponse, email?: string): User {
@@ -48,6 +50,9 @@ function bookFromBackend(b: BookResponse): Book {
     rating: b.rating ?? 0,
     available: (b.status ?? "ACTIVE").toUpperCase() === "ACTIVE",
     reviewCount: b.reviewCount ?? 0,
+    hasPdf: Boolean(b.hasPdf),
+    pdfUrl: b.pdfUrl,
+    isReservedByMe: Boolean(b.reservedByMe),
   };
 }
 
@@ -146,12 +151,16 @@ interface AppContextType {
   toggleFavorite: (bookId: string) => Promise<void>;
   addReview: (review: Omit<Review, "id" | "date">) => Promise<void>;
   deleteReview: (reviewId: string) => void;
-  addBook: (book: Omit<Book, "id">) => Promise<void>;
+  addBook: (book: Omit<Book, "id">) => Promise<Book>;
   updateBook: (bookId: string, updates: Partial<Book>) => Promise<void>;
   deleteBook: (bookId: string) => void;
+  uploadBookPdf: (bookId: string, file: File) => Promise<void>;
+  downloadBookPdf: (bookId: string, url: string) => Promise<void>;
   addLoan: (loan: Omit<Loan, "id">) => Promise<void>;
   updateLoan: (loanId: string, updates: Partial<Loan>) => Promise<void>;
   flagReview: (reviewId: string, reason: string) => void;
+  hideReview: (reviewId: string) => Promise<void>;
+  keepReviewVisible: (reviewId: string) => Promise<void>;
   unflagReview: (reviewId: string) => Promise<void>;
   setCurrentView: (view: string) => void;
   setSelectedBook: (book: Book | null) => void;
@@ -183,6 +192,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+
+  const canManageLibrary = currentUser?.role === "admin" || currentUser?.role === "librarian";
 
   const refreshBooks = async () => {
     setBooksLoading(true);
@@ -240,7 +251,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const refreshAdminReviews = async () => {
-    if (currentUser?.role !== "admin") return;
+    if (!canManageLibrary) return;
     try {
       const data = await reviewsApi.list("VISIBLE");
       setReviews(
@@ -258,7 +269,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const refreshLoans = async () => {
     if (!getAuthToken()) return;
     try {
-      const data = currentUser?.role === "admin" ? await loansApi.listAll() : await loansApi.listMine();
+      const data = canManageLibrary ? await loansApi.listAll() : await loansApi.listMine();
       setLoans(data.map(loanFromBackend));
     } catch (err) {
       console.warn("[AppContext] No se pudieron cargar préstamos:", err);
@@ -320,8 +331,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await refreshBooks();
       return true;
     } catch (err: any) {
-      setAuthError(err?.message || "No se pudo iniciar sesión");
-      return false;
+      const message = getApiErrorMessage(err, "No se pudo iniciar sesión");
+      setAuthError(message);
+      throw new Error(message);
     } finally {
       setAuthLoading(false);
     }
@@ -340,8 +352,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await authApi.register(input);
       return await login(input.email, input.password);
     } catch (err: any) {
-      setAuthError(err?.message || "No se pudo registrar la cuenta");
-      return false;
+      const message = getApiErrorMessage(err, "No se pudo registrar la cuenta");
+      setAuthError(message);
+      throw new Error(message);
     } finally {
       setAuthLoading(false);
     }
@@ -415,14 +428,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const addBook = async (book: Omit<Book, "id">) => {
+  const addBook = async (book: Omit<Book, "id">): Promise<Book> => {
     const validationError = firstError(validateBook(book));
     if (validationError) throw new Error(validationError);
     const created = await booksApi.create(bookToUpsert(book));
     const finalBook = book.available
       ? created
       : await booksApi.updateStatus(created.id, "INACTIVE");
-    setBooks((prev) => [...prev, bookFromBackend(finalBook)]);
+    const mapped = bookFromBackend(finalBook);
+    setBooks((prev) => [...prev, mapped]);
+    return mapped;
   };
 
   const updateBook = async (bookId: string, updates: Partial<Book>) => {
@@ -452,6 +467,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setBooks((prev) => prev.filter((book) => book.id !== bookId));
   };
 
+  const uploadBookPdf = async (bookId: string, file: File) => {
+    await booksApi.uploadPdf(bookId, file);
+    await refreshBooks();
+    if (selectedBook?.id === bookId) {
+      const fresh = await booksApi.get(bookId);
+      setSelectedBookState(bookFromBackend(fresh));
+    }
+  };
+
+  const downloadBookPdf = async (bookId: string, url: string) => {
+    await booksApi.downloadPdf(bookId, url);
+    await refreshBooks();
+    if (selectedBook?.id === bookId) {
+      const fresh = await booksApi.get(bookId);
+      setSelectedBookState(bookFromBackend(fresh));
+    }
+  };
+
   const addLoan = async (loan: Omit<Loan, "id">) => {
     const validationError = firstError(validateLoan(loan));
     if (validationError) throw new Error(validationError);
@@ -478,12 +511,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     );
   };
 
-  const unflagReview = async (reviewId: string) => {
+  const hideReview = async (reviewId: string) => {
     const hidden = await reviewsApi.hide(reviewId);
     setReviews((prev) =>
       prev.map((review) => (review.id === reviewId ? reviewFromBackend(hidden) : review))
     );
   };
+
+  const keepReviewVisible = async (reviewId: string) => {
+    const visible = await reviewsApi.show(reviewId);
+    const mapped = reviewFromBackend(visible);
+    setReviews((prev) =>
+      prev.map((review) => (review.id === reviewId ? { ...mapped, flagged: false } : review))
+    );
+  };
+
+  const unflagReview = keepReviewVisible;
 
   const setSelectedBook = (book: Book | null) => {
     setSelectedBookState(book);
@@ -580,9 +623,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addBook,
         updateBook,
         deleteBook,
+        uploadBookPdf,
+        downloadBookPdf,
         addLoan,
         updateLoan,
         flagReview,
+        hideReview,
+        keepReviewVisible,
         unflagReview,
         setCurrentView,
         setSelectedBook,

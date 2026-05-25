@@ -1,4 +1,4 @@
-import { http } from "./http";
+import { buildApiUrl, getAuthToken, http } from "./http";
 
 export interface BookResponse {
   id: number;
@@ -15,6 +15,9 @@ export interface BookResponse {
   description: string | null;
   rating: number | null;
   reviewCount: number | null;
+  hasPdf: boolean | null;
+  pdfUrl: string | null;
+  reservedByMe: boolean | null;
   createdAt: string;
 }
 
@@ -39,7 +42,14 @@ export interface Page<T> {
   size: number;
 }
 
-export interface ListBooksParams {
+export interface BookPdfResponse {
+  bookId: number;
+  message: string;
+  filename: string;
+  pdfUrl: string;
+}
+
+export interface ListBooksParams extends Record<string, string | number | boolean | null | undefined> {
   search?: string;
   title?: string;
   category?: string;
@@ -70,4 +80,38 @@ export const booksApi = {
   updateStatus(id: string | number, status: "ACTIVE" | "INACTIVE"): Promise<BookResponse> {
     return http<BookResponse>(`/books/${id}/status`, { method: "PATCH", query: { status } });
   },
+
+  uploadPdf(id: string | number, file: File): Promise<BookPdfResponse> {
+    const formData = new FormData();
+    formData.append("file", file);
+    return fetchWithAuth<BookPdfResponse>(`/books/${id}/pdf/upload`, {
+      method: "POST",
+      body: formData,
+    });
+  },
+
+  downloadPdf(id: string | number, url: string): Promise<BookPdfResponse> {
+    return http<BookPdfResponse>(`/books/${id}/pdf/download`, {
+      method: "POST",
+      body: { url },
+    });
+  },
+
+  pdfUrl(id: string | number): string {
+    return buildApiUrl(`/books/${id}/pdf`);
+  },
 };
+
+async function fetchWithAuth<T>(path: string, init: RequestInit): Promise<T> {
+  const token = getAuthToken();
+  const headers = new Headers(init.headers);
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+  const response = await fetch(buildApiUrl(path), { ...init, headers });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(payload?.message || response.statusText || "Request failed");
+  }
+  return payload as T;
+}

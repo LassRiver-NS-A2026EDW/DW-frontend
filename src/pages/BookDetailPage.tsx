@@ -4,7 +4,7 @@ import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
-import { ArrowLeft, Heart, Calendar, BookOpen, Globe, Building2, LogIn } from "lucide-react";
+import { ArrowLeft, Heart, Calendar, BookOpen, Globe, Building2, LogIn, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { RatingStars } from "../components/RatingStars";
 import { StatusBadge } from "../components/StatusBadge";
@@ -18,11 +18,13 @@ export function BookDetail() {
   const {
     selectedBook,
     reviews,
+    loans,
     favorites,
     currentUser,
     toggleFavorite,
     addReview,
     addLoan,
+    updateLoan,
     deleteReview,
     setCurrentView,
   } = useApp();
@@ -41,6 +43,12 @@ export function BookDetail() {
 
   const bookReviews = reviews.filter((r) => r.bookId === selectedBook.id);
   const userReview = bookReviews.find((r) => r.userId === currentUser?.id);
+  const activeLoan = loans.find(
+    (loan) =>
+      loan.bookId === selectedBook.id &&
+      loan.userId === currentUser?.id &&
+      (loan.status === "active" || loan.status === "overdue")
+  );
 
   const requireAuth = (action: string) => {
     setAuthAction(action);
@@ -136,6 +144,31 @@ export function BookDetail() {
     }
   };
 
+  const handleReturn = async () => {
+    if (!activeLoan) return;
+    try {
+      await updateLoan(activeLoan.id, {
+        status: "returned",
+        returnDate: new Date().toISOString().split("T")[0],
+      });
+      toast.success("Libro devuelto correctamente");
+    } catch (err: any) {
+      toast.error(err?.message || "No se pudo devolver el libro");
+    }
+  };
+
+  const handleReadPdf = () => {
+    if (!currentUser) {
+      requireAuth("leer este libro");
+      return;
+    }
+    if (!selectedBook.isReservedByMe && currentUser.role !== "admin" && currentUser.role !== "librarian") {
+      toast.error("Necesitas un prestamo activo para leer este libro");
+      return;
+    }
+    setCurrentView("book-reader");
+  };
+
   if (loading) {
     return (
       <div className="flex-1 overflow-auto">
@@ -181,14 +214,38 @@ export function BookDetail() {
                   />
                   {favorites.includes(selectedBook.id) ? "En Favoritos" : "Agregar a Favoritos"}
                 </Button>
-                <Button
-                  className="w-full"
-                  variant="outline"
-                  disabled={!selectedBook.available}
-                  onClick={handleReserve}
-                >
-                  {selectedBook.available ? "Reservar Libro" : "No Disponible"}
-                </Button>
+                {activeLoan || selectedBook.isReservedByMe ? (
+                  <Button className="w-full" variant="destructive" onClick={handleReturn} disabled={!activeLoan}>
+                    Devolver Libro
+                  </Button>
+                ) : (
+                  <Button
+                    className="w-full"
+                    variant="outline"
+                    disabled={!selectedBook.available}
+                    onClick={handleReserve}
+                  >
+                    {selectedBook.available ? "Reservar Libro" : "No Disponible"}
+                  </Button>
+                )}
+                {selectedBook.hasPdf ? (
+                  <Button
+                    className="w-full"
+                    variant="secondary"
+                    onClick={handleReadPdf}
+                    disabled={!selectedBook.isReservedByMe && currentUser?.role !== "admin" && currentUser?.role !== "librarian"}
+                  >
+                    <FileText className="h-4 w-4 mr-2" />
+                    {!selectedBook.isReservedByMe && currentUser?.role !== "admin" && currentUser?.role !== "librarian"
+                      ? "Requiere prestamo activo"
+                      : "Leer PDF"}
+                  </Button>
+                ) : (
+                  <Button className="w-full" variant="outline" disabled>
+                    <FileText className="h-4 w-4 mr-2" />
+                    Sin PDF disponible
+                  </Button>
+                )}
               </CardContent>
             </Card>
           </div>

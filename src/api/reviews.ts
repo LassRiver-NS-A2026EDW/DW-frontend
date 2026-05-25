@@ -36,4 +36,8 @@ export const reviewsApi = {
   hide(id: string | number): Promise<ReviewResponse> {
     return http<ReviewResponse>(`/reviews/${id}/hide`, { method: "PATCH" });
   },
+
+  show(id: string | number): Promise<ReviewResponse> {
+    return http<ReviewResponse>(`/reviews/${id}/show`, { method: "PATCH" });
+  },
 };
