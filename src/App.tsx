@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { AppProvider, useApp } from "./context/AppContext";
 import { Sidebar } from "./layouts/Sidebar";
 import { Topbar } from "./layouts/Topbar";
@@ -10,10 +11,12 @@ import { BookDetail } from "./pages/BookDetailPage";
 import { BookReader } from "./pages/BookReaderPage";
 import { Favorites } from "./pages/FavoritesPage";
 import { Loans } from "./pages/LoansPage";
+import { Reservations } from "./pages/ReservationsPage";
 import { Reviews } from "./pages/ReviewsPage";
 import { Profile } from "./pages/ProfilePage";
 import { Admin } from "./pages/AdminPage";
 import { Toaster } from "./components/ui/sonner";
+import { queryClient } from "./lib/queryClient";
 
 function AppContent() {
   const { currentView } = useApp();
@@ -41,6 +44,7 @@ function AppContent() {
         {currentView === "book-reader" && <BookReader />}
         {currentView === "favorites" && <Favorites />}
         {currentView === "loans" && <Loans />}
+        {currentView === "reservations" && <Reservations />}
         {currentView === "reviews" && <Reviews />}
         {currentView === "profile" && <Profile />}
         {currentView === "admin" && <Admin />}
@@ -51,9 +55,11 @@ function AppContent() {
 
 export default function App() {
   return (
-    <AppProvider>
-      <AppContent />
-      <Toaster />
-    </AppProvider>
+    <QueryClientProvider client={queryClient}>
+      <AppProvider>
+        <AppContent />
+        <Toaster />
+      </AppProvider>
+    </QueryClientProvider>
   );
 }

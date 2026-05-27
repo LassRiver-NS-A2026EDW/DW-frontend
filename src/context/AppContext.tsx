@@ -1,114 +1,49 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { User, Book, Review, Loan, mockBooks, mockReviews, mockLoans } from "../mocks/mockData";
-import { authApi, Gender, LoginResponse } from "../api/auth";
-import { booksApi, BookResponse, BookUpsertRequest } from "../api/books";
+import { createContext, useContext, useEffect, useMemo, useState, ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import type { Gender, LoginResponse } from "../api/auth";
+import { authApi } from "../api/auth";
+import { booksApi, type ListBooksParams } from "../api/books";
 import { favoritesApi } from "../api/favorites";
-import { reviewsApi, ReviewResponse } from "../api/reviews";
-import { loansApi, LoanResponse } from "../api/loans";
-import { usersApi, UserProfileResponse } from "../api/users";
-import { getApiErrorMessage, restoreTokenFromStorage, setAuthToken, getAuthToken } from "../api/http";
+import { loansApi, type LoanRenewalResponse } from "../api/loans";
+import { reservationsApi } from "../api/reservations";
+import { reviewsApi } from "../api/reviews";
+import { usersApi } from "../api/users";
 import {
-  firstError,
-  validateBook,
-  validateLoan,
-  validateProfile,
-  validateReview,
-} from "../utils/validation";
+  getApiErrorMessage,
+  getAuthToken,
+  restoreTokenFromStorage,
+  setAuthToken,
+} from "../api/http";
+import {
+  bookFromBackend,
+  bookToUpsert,
+  loanFromBackend,
+  reservationFromBackend,
+  reviewFromBackend,
+  userFromBackend,
+} from "../api/mappers";
+import { queryKeys } from "../hooks/queryKeys";
+import {
+  useAdminReviewsQuery,
+  useBookFacetsQuery,
+  useBooksQuery,
+  useFavoritesQuery,
+  useLoansQuery,
+  useReservationsQuery,
+} from "../hooks/useLibraryQueries";
+import { Book, Loan, mockBooks, mockLoans, mockReviews, Reservation, Review, User } from "../mocks/mockData";
+import { firstError, validateBook, validateLoan, validateProfile, validateReview } from "../utils/validation";
 
 const USER_STORAGE_KEY = "lassriver.auth.user";
-
-function mapBackendRole(role: string): User["role"] {
-  if (role === "ADMIN") return "admin";
-  if (role === "LIBRARIAN") return "librarian";
-  return "user";
-}
-
-function userFromBackend(user: UserProfileResponse | LoginResponse, email?: string): User {
-  return {
-    id: String(user.id),
-    name: user.name,
-    email: "email" in user ? user.email : email ?? "",
-    role: mapBackendRole(user.role),
-  };
-}
-
-function bookFromBackend(b: BookResponse): Book {
-  return {
-    id: String(b.id),
-    title: b.title,
-    author: b.author,
-    isbn: b.isbn,
-    category: b.category ?? "General",
-    language: b.language ?? "Español",
-    publisher: b.publisher ?? "Sin editorial",
-    publishDate: b.publishDate ?? b.createdAt?.slice(0, 10) ?? "",
-    pages: b.pages ?? 0,
-    description: b.description ?? "Sin descripción disponible.",
-    coverUrl:
-      b.coverUrl ||
-      "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400&h=600&fit=crop",
-    rating: b.rating ?? 0,
-    available: (b.status ?? "ACTIVE").toUpperCase() === "ACTIVE",
-    reviewCount: b.reviewCount ?? 0,
-    hasPdf: Boolean(b.hasPdf),
-    pdfUrl: b.pdfUrl,
-    isReservedByMe: Boolean(b.reservedByMe),
-  };
-}
-
-function bookToUpsert(book: Omit<Book, "id"> | Book): BookUpsertRequest {
-  return {
-    title: book.title,
-    author: book.author,
-    isbn: book.isbn,
-    category: book.category,
-    language: book.language,
-    coverUrl: book.coverUrl,
-    publisher: book.publisher,
-    publishDate: book.publishDate || null,
-    pages: book.pages || null,
-    description: book.description,
-  };
-}
-
-function reviewFromBackend(r: ReviewResponse): Review {
-  return {
-    id: String(r.id),
-    bookId: String(r.bookId),
-    userId: String(r.userId),
-    userName: r.userName || r.userEmail,
-    rating: r.rating,
-    comment: r.comment,
-    date: r.createdAt?.slice(0, 10) ?? "",
-    flagged: r.status?.toUpperCase() === "HIDDEN",
-    flagReason: r.status,
-  };
-}
-
-function loanFromBackend(l: LoanResponse): Loan {
-  const loanDate = l.loanDate?.slice(0, 10) ?? "";
-  const dueDate = loanDate
-    ? new Date(new Date(loanDate).getTime() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
-    : "";
-
-  return {
-    id: String(l.id),
-    bookId: String(l.bookId),
-    bookTitle: l.bookTitle,
-    userId: String(l.userId),
-    userName: l.userEmail,
-    loanDate,
-    dueDate,
-    returnDate: l.returnedAt?.slice(0, 10),
-    status: l.status?.toUpperCase() === "RETURNED" ? "returned" : "active",
-  };
-}
 
 interface AppContextType {
   currentUser: User | null;
   books: Book[];
+  bookCategories: string[];
+  bookLanguages: string[];
   reviews: Review[];
   loans: Loan[];
+  reservations: Reservation[];
   favorites: string[];
   booksLoading: boolean;
   bookPage: number;
@@ -136,10 +71,12 @@ interface AppContextType {
   }) => Promise<boolean>;
   logout: () => Promise<void>;
   refreshBooks: () => Promise<void>;
+  refreshBookFacets: () => Promise<void>;
   refreshFavorites: () => Promise<void>;
   refreshReviewsForBook: (bookId: string) => Promise<void>;
   refreshAdminReviews: () => Promise<void>;
   refreshLoans: () => Promise<void>;
+  refreshReservations: () => Promise<void>;
   updateProfile: (user: Partial<User>) => Promise<void>;
   changePassword: (input: { currentPassword: string; newPassword: string }) => Promise<void>;
   setSearchQuery: (query: string) => void;
@@ -156,8 +93,13 @@ interface AppContextType {
   deleteBook: (bookId: string) => void;
   uploadBookPdf: (bookId: string, file: File) => Promise<void>;
   downloadBookPdf: (bookId: string, url: string) => Promise<void>;
-  addLoan: (loan: Omit<Loan, "id">) => Promise<void>;
+  addLoan: (loan: Omit<Loan, "id">, durationMinutes: number) => Promise<void>;
   updateLoan: (loanId: string, updates: Partial<Loan>) => Promise<void>;
+  renewLoan: (loanId: string, durationMinutes: number) => Promise<void>;
+  getLoanHistory: (loanId: string) => Promise<LoanRenewalResponse[]>;
+  createReservation: (bookId: string, durationMinutes: number) => Promise<void>;
+  cancelReservation: (reservationId: string) => Promise<void>;
+  createBookCopy: (bookId: string) => Promise<void>;
   flagReview: (reviewId: string, reason: string) => void;
   hideReview: (reviewId: string) => Promise<void>;
   keepReviewVisible: (reviewId: string) => Promise<void>;
@@ -171,16 +113,11 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [books, setBooks] = useState<Book[]>(mockBooks);
   const [reviews, setReviews] = useState<Review[]>(mockReviews);
-  const [loans, setLoans] = useState<Loan[]>(mockLoans);
-  const [favorites, setFavorites] = useState<string[]>([]);
-  const [booksLoading, setBooksLoading] = useState(false);
   const [bookPage, setBookPage] = useState(0);
   const [bookPageSize] = useState(8);
-  const [bookTotalElements, setBookTotalElements] = useState(mockBooks.length);
-  const [bookTotalPages, setBookTotalPages] = useState(Math.max(1, Math.ceil(mockBooks.length / 8)));
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [languageFilter, setLanguageFilter] = useState("all");
@@ -194,101 +131,54 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [authError, setAuthError] = useState<string | null>(null);
 
   const canManageLibrary = currentUser?.role === "admin" || currentUser?.role === "librarian";
+  const authenticated = Boolean(currentUser && getAuthToken());
 
-  const refreshBooks = async () => {
-    setBooksLoading(true);
-    try {
-      const status =
-        availabilityFilter === "available"
-          ? "ACTIVE"
-          : availabilityFilter === "unavailable"
-            ? "INACTIVE"
-            : undefined;
-      const page = await booksApi.list({
-        page: bookPage,
-        size: bookPageSize,
-        sort: "title,asc",
-        search: searchQuery,
-        category: categoryFilter === "all" ? undefined : categoryFilter,
-        language: languageFilter === "all" ? undefined : languageFilter,
-        status,
-      });
-      const mapped = page.content.map(bookFromBackend);
-      setBooks(mapped);
-      setBookTotalElements(page.totalElements);
-      setBookTotalPages(Math.max(1, page.totalPages));
-      setSelectedBookState((current) =>
-        current ? mapped.find((book) => book.id === current.id) ?? current : current
-      );
-    } catch (err) {
-      console.warn("[AppContext] No se pudieron cargar libros del backend:", err);
-    } finally {
-      setBooksLoading(false);
-    }
-  };
+  const bookQueryParams = useMemo<ListBooksParams>(() => {
+    const availability =
+      availabilityFilter === "available"
+        ? "available"
+        : availabilityFilter === "unavailable"
+          ? "unavailable"
+          : undefined;
 
-  const refreshFavorites = async () => {
-    if (!getAuthToken()) return;
-    try {
-      const data = await favoritesApi.list();
-      setFavorites(data.map((favorite) => String(favorite.bookId)));
-    } catch (err) {
-      console.warn("[AppContext] No se pudieron cargar favoritos:", err);
-    }
-  };
+    return {
+      page: bookPage,
+      size: bookPageSize,
+      sort: "title,asc",
+      search: searchQuery,
+      category: categoryFilter === "all" ? undefined : categoryFilter,
+      language: languageFilter === "all" ? undefined : languageFilter,
+      availability,
+    };
+  }, [availabilityFilter, bookPage, bookPageSize, categoryFilter, languageFilter, searchQuery]);
 
-  const refreshReviewsForBook = async (bookId: string) => {
-    try {
-      const data = await reviewsApi.byBook(bookId);
-      const mapped = data.map(reviewFromBackend);
-      setReviews((prev) => [
-        ...prev.filter((review) => review.bookId !== bookId),
-        ...mapped,
-      ]);
-    } catch (err) {
-      console.warn("[AppContext] No se pudieron cargar reseñas:", err);
-    }
-  };
+  const booksQuery = useBooksQuery(bookQueryParams);
+  const facetsQuery = useBookFacetsQuery();
+  const favoritesQuery = useFavoritesQuery(authenticated);
+  const loansQuery = useLoansQuery(Boolean(canManageLibrary), authenticated);
+  const reservationsQuery = useReservationsQuery(authenticated);
+  const adminReviewsQuery = useAdminReviewsQuery(Boolean(canManageLibrary && authenticated));
 
-  const refreshAdminReviews = async () => {
-    if (!canManageLibrary) return;
-    try {
-      const data = await reviewsApi.list("VISIBLE");
-      setReviews(
-        data.map((review) => ({
-          ...reviewFromBackend(review),
-          flagged: true,
-          flagReason: "Pendiente de moderación",
-        }))
-      );
-    } catch (err) {
-      console.warn("[AppContext] No se pudieron cargar reseñas para moderación:", err);
-    }
-  };
-
-  const refreshLoans = async () => {
-    if (!getAuthToken()) return;
-    try {
-      const data = canManageLibrary ? await loansApi.listAll() : await loansApi.listMine();
-      setLoans(data.map(loanFromBackend));
-    } catch (err) {
-      console.warn("[AppContext] No se pudieron cargar préstamos:", err);
-    }
-  };
+  const books = booksQuery.data?.content ?? mockBooks;
+  const favorites = favoritesQuery.data ?? [];
+  const loans = loansQuery.data ?? mockLoans;
+  const reservations = reservationsQuery.data ?? [];
+  const bookCategories =
+    facetsQuery.data?.categories ?? Array.from(new Set(mockBooks.map((book) => book.category))).sort();
+  const bookLanguages =
+    facetsQuery.data?.languages ?? Array.from(new Set(mockBooks.map((book) => book.language))).sort();
 
   useEffect(() => {
     const token = restoreTokenFromStorage();
     const storedUser = localStorage.getItem(USER_STORAGE_KEY);
     if (token && storedUser) {
       try {
-        const parsed = JSON.parse(storedUser) as User;
-        setCurrentUser(parsed);
+        setCurrentUser(JSON.parse(storedUser) as User);
       } catch {
         localStorage.removeItem(USER_STORAGE_KEY);
         setAuthToken(null);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -296,25 +186,70 @@ export function AppProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem(USER_STORAGE_KEY);
       setAuthToken(null);
       setCurrentUser(null);
-      setFavorites([]);
-      setLoans([]);
+      queryClient.removeQueries({ queryKey: queryKeys.favorites });
+      queryClient.removeQueries({ queryKey: ["loans"] });
+      queryClient.removeQueries({ queryKey: queryKeys.reservations });
       setCurrentView("login");
     };
     window.addEventListener("bookworm:unauthorized", handleUnauthorized);
     return () => window.removeEventListener("bookworm:unauthorized", handleUnauthorized);
-  }, []);
+  }, [queryClient]);
 
   useEffect(() => {
-    refreshBooks();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bookPage, bookPageSize, searchQuery, categoryFilter, languageFilter, availabilityFilter]);
+    if (adminReviewsQuery.data && canManageLibrary) {
+      setReviews((current) => mergeReviews(current, adminReviewsQuery.data));
+    }
+  }, [adminReviewsQuery.data, canManageLibrary]);
 
-  useEffect(() => {
-    if (!currentUser) return;
-    refreshFavorites();
-    refreshLoans();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser?.id, currentUser?.role]);
+  const invalidateBooks = async () => {
+    await queryClient.invalidateQueries({ queryKey: ["books"] });
+  };
+
+  const refreshBooks = async () => {
+    await invalidateBooks();
+  };
+
+  const refreshBookFacets = async () => {
+    await queryClient.invalidateQueries({ queryKey: queryKeys.bookFacets });
+  };
+
+  const refreshFavorites = async () => {
+    await queryClient.invalidateQueries({ queryKey: queryKeys.favorites });
+  };
+
+  const refreshLoans = async () => {
+    await queryClient.invalidateQueries({ queryKey: ["loans"] });
+  };
+
+  const refreshReservations = async () => {
+    await queryClient.invalidateQueries({ queryKey: queryKeys.reservations });
+  };
+
+  const refreshAdminReviews = async () => {
+    const data = await queryClient.fetchQuery({
+      queryKey: queryKeys.adminReviews,
+      queryFn: async () => {
+        const response = await reviewsApi.list("VISIBLE");
+        return response.map((review) => ({
+          ...reviewFromBackend(review),
+          flagged: true,
+          flagReason: "Pendiente de moderacion",
+        }));
+      },
+    });
+    setReviews((current) => mergeReviews(current, data));
+  };
+
+  const refreshReviewsForBook = async (bookId: string) => {
+    const data = await queryClient.fetchQuery({
+      queryKey: queryKeys.reviewsByBook(bookId),
+      queryFn: async () => {
+        const response = await reviewsApi.byBook(bookId);
+        return response.map(reviewFromBackend);
+      },
+    });
+    setReviews((current) => [...current.filter((review) => review.bookId !== bookId), ...data]);
+  };
 
   const persistSession = (res: LoginResponse, email: string) => {
     const user = userFromBackend(res, email);
@@ -328,10 +263,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const res = await authApi.login({ email, password });
       persistSession(res, email);
-      await refreshBooks();
+      await invalidateBooks();
       return true;
     } catch (err: any) {
-      const message = getApiErrorMessage(err, "No se pudo iniciar sesión");
+      const message = getApiErrorMessage(err, "No se pudo iniciar sesion");
       setAuthError(message);
       throw new Error(message);
     } finally {
@@ -368,10 +303,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     localStorage.removeItem(USER_STORAGE_KEY);
     setCurrentUser(null);
-    setFavorites([]);
-    setLoans([]);
+    queryClient.removeQueries({ queryKey: queryKeys.favorites });
+    queryClient.removeQueries({ queryKey: ["loans"] });
+    queryClient.removeQueries({ queryKey: queryKeys.reservations });
     setCurrentView("home");
-    await refreshBooks();
+    await invalidateBooks();
   };
 
   const updateProfile = async (updates: Partial<User>) => {
@@ -398,10 +334,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const toggleFavorite = async (bookId: string) => {
     const validationError = firstError(validateLoan({ bookId }));
     if (validationError) throw new Error(validationError);
-    const res = await favoritesApi.toggle(bookId);
-    setFavorites((prev) =>
-      res.favorite ? [...new Set([...prev, String(res.bookId)])] : prev.filter((id) => id !== String(res.bookId))
-    );
+    await favoritesApi.toggle(bookId);
+    await refreshFavorites();
   };
 
   const addReview = async (review: Omit<Review, "id" | "date">) => {
@@ -412,32 +346,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
       rating: review.rating,
       comment: review.comment.trim(),
     });
-    setReviews((prev) => [...prev.filter((r) => r.id !== String(created.id)), reviewFromBackend(created)]);
-    await refreshBooks();
+    setReviews((current) => mergeReviews(current, [reviewFromBackend(created)]));
+    await invalidateBooks();
   };
 
   const deleteReview = (reviewId: string) => {
-    const review = reviews.find((r) => r.id === reviewId);
-    if (review) {
-      setReviews((prev) => prev.filter((r) => r.id !== reviewId));
-      setBooks((prev) =>
-        prev.map((book) =>
+    const review = reviews.find((item) => item.id === reviewId);
+    if (!review) return;
+    setReviews((current) => current.filter((item) => item.id !== reviewId));
+    queryClient.setQueriesData({ queryKey: ["books"] }, (data: any) => {
+      if (!data?.content) return data;
+      return {
+        ...data,
+        content: data.content.map((book: Book) =>
           book.id === review.bookId ? { ...book, reviewCount: Math.max(0, book.reviewCount - 1) } : book
-        )
-      );
-    }
+        ),
+      };
+    });
   };
 
   const addBook = async (book: Omit<Book, "id">): Promise<Book> => {
     const validationError = firstError(validateBook(book));
     if (validationError) throw new Error(validationError);
     const created = await booksApi.create(bookToUpsert(book));
-    const finalBook = book.available
-      ? created
-      : await booksApi.updateStatus(created.id, "INACTIVE");
-    const mapped = bookFromBackend(finalBook);
-    setBooks((prev) => [...prev, mapped]);
-    return mapped;
+    const finalBook = book.available ? created : await booksApi.updateStatus(created.id, "INACTIVE");
+    await Promise.all([invalidateBooks(), refreshBookFacets()]);
+    return bookFromBackend(finalBook);
   };
 
   const updateBook = async (bookId: string, updates: Partial<Book>) => {
@@ -445,110 +379,125 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!current) return;
 
     if (updates.available !== undefined && Object.keys(updates).length === 1) {
-      const updated = await booksApi.updateStatus(bookId, updates.available ? "ACTIVE" : "INACTIVE");
-      const mapped = bookFromBackend(updated);
-      setBooks((prev) => prev.map((book) => (book.id === bookId ? mapped : book)));
+      await booksApi.updateStatus(bookId, updates.available ? "ACTIVE" : "INACTIVE");
+      await invalidateBooks();
       return;
     }
 
     const nextBook = { ...current, ...updates };
     const validationError = firstError(validateBook(nextBook));
     if (validationError) throw new Error(validationError);
-    const updated = await booksApi.update(bookId, bookToUpsert(nextBook));
-    const finalBook =
-      updates.available === undefined || updates.available === current.available
-        ? updated
-        : await booksApi.updateStatus(bookId, updates.available ? "ACTIVE" : "INACTIVE");
-    const mapped = bookFromBackend(finalBook);
-    setBooks((prev) => prev.map((book) => (book.id === bookId ? mapped : book)));
+    await booksApi.update(bookId, bookToUpsert(nextBook));
+    if (updates.available !== undefined && updates.available !== current.available) {
+      await booksApi.updateStatus(bookId, updates.available ? "ACTIVE" : "INACTIVE");
+    }
+    await Promise.all([invalidateBooks(), refreshBookFacets()]);
   };
 
-  const deleteBook = (bookId: string) => {
-    setBooks((prev) => prev.filter((book) => book.id !== bookId));
+  const deleteBook = async (bookId: string) => {
+    queryClient.setQueriesData({ queryKey: ["books"] }, (data: any) => {
+      if (!data?.content) return data;
+      return { ...data, content: data.content.filter((book: Book) => book.id !== bookId) };
+    });
   };
 
   const uploadBookPdf = async (bookId: string, file: File) => {
     await booksApi.uploadPdf(bookId, file);
-    await refreshBooks();
-    if (selectedBook?.id === bookId) {
-      const fresh = await booksApi.get(bookId);
-      setSelectedBookState(bookFromBackend(fresh));
-    }
+    await refetchSelectedBook(bookId);
+    await invalidateBooks();
   };
 
   const downloadBookPdf = async (bookId: string, url: string) => {
     await booksApi.downloadPdf(bookId, url);
-    await refreshBooks();
-    if (selectedBook?.id === bookId) {
-      const fresh = await booksApi.get(bookId);
-      setSelectedBookState(bookFromBackend(fresh));
-    }
+    await refetchSelectedBook(bookId);
+    await invalidateBooks();
   };
 
-  const addLoan = async (loan: Omit<Loan, "id">) => {
-    const validationError = firstError(validateLoan(loan));
+  const addLoan = async (loan: Omit<Loan, "id">, durationMinutes: number) => {
+    const validationError = firstError(validateLoan({ ...loan, durationMinutes }));
     if (validationError) throw new Error(validationError);
-    const created = await loansApi.create(loan.bookId);
-    setLoans((prev) => [loanFromBackend(created), ...prev]);
-    await refreshBooks();
+    await loansApi.create(loan.bookId, durationMinutes);
+    await Promise.all([refreshLoans(), refreshReservations(), invalidateBooks()]);
   };
 
   const updateLoan = async (loanId: string, updates: Partial<Loan>) => {
     if (updates.status === "returned") {
-      const updated = await loansApi.returnLoan(loanId);
-      setLoans((prev) => prev.map((loan) => (loan.id === loanId ? loanFromBackend(updated) : loan)));
-      await refreshBooks();
-      return;
+      await loansApi.returnLoan(loanId);
+      await Promise.all([refreshLoans(), refreshReservations(), invalidateBooks()]);
     }
-    setLoans((prev) => prev.map((loan) => (loan.id === loanId ? { ...loan, ...updates } : loan)));
+  };
+
+  const renewLoan = async (loanId: string, durationMinutes: number) => {
+    const validationError = firstError(validateLoan({ bookId: 1, durationMinutes }));
+    if (validationError) throw new Error(validationError);
+    await loansApi.renew(loanId, durationMinutes);
+    await refreshLoans();
+  };
+
+  const getLoanHistory = async (loanId: string) => loansApi.history(loanId);
+
+  const createReservation = async (bookId: string, durationMinutes: number) => {
+    const validationError = firstError(validateLoan({ bookId, durationMinutes }));
+    if (validationError) throw new Error(validationError);
+    await reservationsApi.create(bookId, durationMinutes);
+    await Promise.all([refreshReservations(), invalidateBooks()]);
+  };
+
+  const cancelReservation = async (reservationId: string) => {
+    await reservationsApi.cancel(reservationId);
+    await Promise.all([refreshReservations(), invalidateBooks()]);
+  };
+
+  const createBookCopy = async (bookId: string) => {
+    await booksApi.createCopy(bookId);
+    await Promise.all([invalidateBooks(), refetchSelectedBook(bookId)]);
   };
 
   const flagReview = (reviewId: string, reason: string) => {
-    setReviews((prev) =>
-      prev.map((review) =>
-        review.id === reviewId ? { ...review, flagged: true, flagReason: reason } : review
-      )
+    setReviews((current) =>
+      current.map((review) => (review.id === reviewId ? { ...review, flagged: true, flagReason: reason } : review))
     );
   };
 
   const hideReview = async (reviewId: string) => {
     const hidden = await reviewsApi.hide(reviewId);
-    setReviews((prev) =>
-      prev.map((review) => (review.id === reviewId ? reviewFromBackend(hidden) : review))
-    );
+    setReviews((current) => mergeReviews(current, [reviewFromBackend(hidden)]));
+    await refreshAdminReviews();
   };
 
   const keepReviewVisible = async (reviewId: string) => {
     const visible = await reviewsApi.show(reviewId);
-    const mapped = reviewFromBackend(visible);
-    setReviews((prev) =>
-      prev.map((review) => (review.id === reviewId ? { ...mapped, flagged: false } : review))
-    );
+    setReviews((current) => mergeReviews(current, [{ ...reviewFromBackend(visible), flagged: false }]));
+    await refreshAdminReviews();
   };
 
   const unflagReview = keepReviewVisible;
 
+  const refetchSelectedBook = async (bookId: string) => {
+    if (selectedBook?.id !== bookId) return;
+    const fresh = await queryClient.fetchQuery({
+      queryKey: queryKeys.book(bookId),
+      queryFn: async () => bookFromBackend(await booksApi.get(bookId)),
+    });
+    setSelectedBookState(fresh);
+  };
+
   const setSelectedBook = (book: Book | null) => {
     setSelectedBookState(book);
-    if (book) {
-      booksApi.get(book.id).then((fresh) => setSelectedBookState(bookFromBackend(fresh))).catch(() => undefined);
-      refreshReviewsForBook(book.id);
-    }
+    if (!book) return;
+    refetchSelectedBook(book.id).catch(() => undefined);
+    refreshReviewsForBook(book.id).catch(() => undefined);
   };
 
   const toggleSidebar = () => {
-    setSidebarCollapsed((prev) => !prev);
+    setSidebarCollapsed((current) => !current);
   };
 
   const toggleTheme = () => {
-    setTheme((prev) => {
-      const newTheme = prev === "light" ? "dark" : "light";
-      if (newTheme === "dark") {
-        document.documentElement.classList.add("dark");
-      } else {
-        document.documentElement.classList.remove("dark");
-      }
-      return newTheme;
+    setTheme((current) => {
+      const next = current === "light" ? "dark" : "light";
+      document.documentElement.classList.toggle("dark", next === "dark");
+      return next;
     });
   };
 
@@ -582,14 +531,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       value={{
         currentUser,
         books,
+        bookCategories,
+        bookLanguages,
         reviews,
         loans,
+        reservations,
         favorites,
-        booksLoading,
+        booksLoading: booksQuery.isLoading || booksQuery.isFetching,
         bookPage,
         bookPageSize,
-        bookTotalElements,
-        bookTotalPages,
+        bookTotalElements: booksQuery.data?.totalElements ?? mockBooks.length,
+        bookTotalPages: Math.max(1, booksQuery.data?.totalPages ?? Math.ceil(mockBooks.length / bookPageSize)),
         searchQuery,
         categoryFilter,
         languageFilter,
@@ -605,10 +557,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         register,
         logout,
         refreshBooks,
+        refreshBookFacets,
         refreshFavorites,
         refreshReviewsForBook,
         refreshAdminReviews,
         refreshLoans,
+        refreshReservations,
         updateProfile,
         changePassword,
         setSearchQuery: updateSearchQuery,
@@ -627,6 +581,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         downloadBookPdf,
         addLoan,
         updateLoan,
+        renewLoan,
+        getLoanHistory,
+        createReservation,
+        cancelReservation,
+        createBookCopy,
         flagReview,
         hideReview,
         keepReviewVisible,
@@ -640,6 +599,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       {children}
     </AppContext.Provider>
   );
+}
+
+function mergeReviews(current: Review[], incoming: Review[]) {
+  const incomingIds = new Set(incoming.map((review) => review.id));
+  return [...current.filter((review) => !incomingIds.has(review.id)), ...incoming];
 }
 
 export function useApp() {
