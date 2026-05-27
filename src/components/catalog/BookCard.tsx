@@ -44,9 +44,9 @@ export function BookCard({ book, isFavorite, onOpen, onToggleFavorite }: BookCar
           <p className="mt-1 line-clamp-1 text-sm text-muted-foreground">{book.author}</p>
         </div>
 
-        <div className="mt-1 min-h-[38px]">
+        <div className="mt-1 flex min-h-[38px] items-start gap-1 whitespace-nowrap">
           <RatingStars rating={book.rating} readonly size="sm" showLabel />
-          <span className="text-xs text-muted-foreground ml-1">({book.reviewCount})</span>
+          <span className="pt-0.5 text-xs text-muted-foreground">({book.reviewCount})</span>
         </div>
 
         <div className="mt-auto space-y-2">

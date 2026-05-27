@@ -1,7 +1,8 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { booksApi, type ListBooksParams } from "../api/books";
 import { favoritesApi } from "../api/favorites";
 import { loansApi } from "../api/loans";
+import { notificationsApi, type NotificationStatus } from "../api/notifications";
 import { reservationsApi } from "../api/reservations";
 import { reviewsApi } from "../api/reviews";
 import {
@@ -69,17 +70,54 @@ export function useReservationsQuery(enabled: boolean) {
   });
 }
 
+export function useNotificationsQuery(enabled: boolean, status: NotificationStatus = "all", page = 0, size = 10) {
+  return useQuery({
+    queryKey: queryKeys.notifications.list(status, page, size),
+    enabled,
+    queryFn: () => notificationsApi.list(status, page, size),
+    refetchInterval: enabled ? 30000 : false,
+  });
+}
+
+export function useUnreadNotificationsCountQuery(enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.notifications.unreadCount,
+    enabled,
+    queryFn: notificationsApi.unreadCount,
+    refetchInterval: enabled ? 30000 : false,
+    initialData: { unreadCount: 0 },
+  });
+}
+
+export function useMarkNotificationReadMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: notificationsApi.markAsRead,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
+    },
+  });
+}
+
+export function useMarkAllNotificationsReadMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: notificationsApi.markAllAsRead,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
+    },
+  });
+}
+
 export function useAdminReviewsQuery(enabled: boolean) {
   return useQuery({
     queryKey: queryKeys.adminReviews,
     enabled,
     queryFn: async () => {
-      const reviews = await reviewsApi.list("VISIBLE");
-      return reviews.map((review) => ({
-        ...reviewFromBackend(review),
-        flagged: true,
-        flagReason: "Pendiente de moderacion",
-      }));
+      const reviews = await reviewsApi.list("ALL");
+      return reviews.map(reviewFromBackend);
     },
     initialData: [],
   });

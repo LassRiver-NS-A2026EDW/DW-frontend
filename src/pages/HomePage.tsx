@@ -1,27 +1,54 @@
 import { useApp } from "../context/AppContext";
 import { BookOpen, Star, TrendingUp, Users } from "lucide-react";
+import { useBooksQuery } from "../hooks/useLibraryQueries";
+
+const HOME_BOOKS_QUERY = {
+  page: 0,
+  size: 1000,
+  sort: "title,asc",
+};
+
+const HOME_AVAILABLE_BOOKS_QUERY = {
+  page: 0,
+  size: 1,
+  sort: "title,asc",
+  availability: "available" as const,
+};
 
 export function Home() {
-  const { books, currentUser, setCurrentView, setSelectedBook } = useApp();
+  const { books, bookCategories, currentUser, setCategoryFilter, setCurrentView, setSelectedBook } = useApp();
+  const homeBooksQuery = useBooksQuery(HOME_BOOKS_QUERY);
+  const availableBooksQuery = useBooksQuery(HOME_AVAILABLE_BOOKS_QUERY);
 
-  const featuredBooks = books.filter((b) => b.rating >= 4.7).slice(0, 6);
-  const categories = Array.from(new Set(books.map((b) => b.category))).filter(Boolean);
+  const summaryBooks = homeBooksQuery.data?.content ?? books;
+  const categories = bookCategories;
+  const featuredBooks = [...summaryBooks]
+    .sort((first, second) => second.rating - first.rating)
+    .slice(0, 6);
   const stats = {
-    totalBooks: books.length,
-    availableBooks: books.filter((b) => b.available).length,
+    totalBooks: homeBooksQuery.data?.totalElements ?? summaryBooks.length,
+    availableBooks: availableBooksQuery.data?.totalElements ?? summaryBooks.filter((book) => book.available).length,
     categories: categories.length,
-    avgRating: books.length > 0 ? (books.reduce((acc, book) => acc + book.rating, 0) / books.length).toFixed(1) : "0.0",
+    avgRating:
+      summaryBooks.length > 0
+        ? (summaryBooks.reduce((acc, book) => acc + book.rating, 0) / summaryBooks.length).toFixed(1)
+        : "0.0",
   };
 
-  const openBook = (book: (typeof books)[number]) => {
+  const openBook = (book: (typeof summaryBooks)[number]) => {
     setSelectedBook(book);
     setCurrentView("book-detail");
+  };
+
+  const openCategory = (category: string) => {
+    setCategoryFilter(category);
+    setCurrentView("catalog");
   };
 
   const statItems = [
     { label: "Titulos", value: stats.totalBooks, icon: BookOpen, color: "var(--primary)" },
     { label: "Rating", value: stats.avgRating, icon: Star, color: "#f59e0b" },
-    { label: "Generos", value: stats.categories, icon: Users, color: "var(--accent)" },
+    { label: "Categorias", value: stats.categories, icon: Users, color: "var(--accent)" },
     { label: "Disponibles", value: stats.availableBooks, icon: TrendingUp, color: "var(--river-cyan)" },
   ];
 
@@ -128,13 +155,13 @@ export function Home() {
         <section className="mt-32 p-12 rounded-[3rem] bg-card border border-border animate-in" style={{ animationDelay: "0.6s" }}>
           <h3 className="text-lg font-bold text-foreground mb-8 flex items-center gap-4">
             <Users className="h-5 w-5 text-accent" />
-            Explorar por Genero
+            Explorar por Categoria
           </h3>
           <div className="flex flex-wrap gap-3">
             {categories.map((category) => (
               <button
                 key={category}
-                onClick={() => setCurrentView("catalog")}
+                onClick={() => openCategory(category)}
                 className="px-8 py-3 rounded-full bg-card border border-border text-muted-foreground text-xs font-bold hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all"
               >
                 {category}

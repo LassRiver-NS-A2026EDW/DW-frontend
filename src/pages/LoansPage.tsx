@@ -1,25 +1,40 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useApp } from "../context/AppContext";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { EmptyState } from "../components/EmptyState";
 import { LoanCard } from "../components/LoanCard";
 import { LoanDurationSelect } from "../components/LoanDurationSelect";
+import { LoanDateFilters, type LoanDateField } from "../components/loans/LoanDateFilters";
 import { BookOpen, LogIn } from "lucide-react";
 import { toast } from "sonner";
 import type { LoanRenewalResponse } from "../api/loans";
+import type { Loan } from "../mocks/mockData";
 
 export function Loans() {
   const { currentUser, loans, refreshLoans, updateLoan, renewLoan, getLoanHistory, setCurrentView } = useApp();
   const [renewLoanId, setRenewLoanId] = useState<string | null>(null);
   const [renewDurationMinutes, setRenewDurationMinutes] = useState(1440);
   const [historyByLoan, setHistoryByLoan] = useState<Record<string, LoanRenewalResponse[]>>({});
+  const [dateField, setDateField] = useState<LoanDateField>("loanDate");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
 
   useEffect(() => {
     if (currentUser) {
       refreshLoans();
     }
   }, [currentUser?.id]);
+
+  const filteredLoans = useMemo(
+    () => loans.filter((loan) => matchesLoanDateRange(loan, dateField, startDate, endDate)),
+    [dateField, endDate, loans, startDate]
+  );
+
+  const clearDateFilters = () => {
+    setStartDate("");
+    setEndDate("");
+  };
 
   if (!currentUser) {
     return (
@@ -86,11 +101,35 @@ export function Loans() {
             onAction={() => setCurrentView("catalog")}
           />
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {loans.map((loan) => (
-              <LoanCard key={loan.id} loan={loan} onReturn={handleReturn} onRenew={openRenewDialog} />
-            ))}
-          </div>
+          <>
+            <LoanDateFilters
+              dateField={dateField}
+              startDate={startDate}
+              endDate={endDate}
+              resultCount={filteredLoans.length}
+              totalCount={loans.length}
+              onDateFieldChange={setDateField}
+              onStartDateChange={setStartDate}
+              onEndDateChange={setEndDate}
+              onClear={clearDateFilters}
+            />
+
+            {filteredLoans.length === 0 ? (
+              <EmptyState
+                icon={BookOpen}
+                title="No hay prestamos en ese rango"
+                description="Ajusta las fechas o limpia el filtro para volver a ver tus prestamos."
+                actionLabel="Limpiar filtro"
+                onAction={clearDateFilters}
+              />
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {filteredLoans.map((loan) => (
+                  <LoanCard key={loan.id} loan={loan} onReturn={handleReturn} onRenew={openRenewDialog} />
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -133,4 +172,29 @@ export function Loans() {
       </Dialog>
     </div>
   );
+}
+
+function matchesLoanDateRange(loan: Loan, field: LoanDateField, startDate: string, endDate: string) {
+  if (!startDate && !endDate) {
+    return true;
+  }
+
+  const targetDate = getLoanDateValue(loan, field);
+  if (!targetDate) {
+    return false;
+  }
+
+  if (startDate && targetDate < startDate) {
+    return false;
+  }
+
+  if (endDate && targetDate > endDate) {
+    return false;
+  }
+
+  return true;
+}
+
+function getLoanDateValue(loan: Loan, field: LoanDateField) {
+  return loan[field]?.slice(0, 10) ?? "";
 }

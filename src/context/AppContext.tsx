@@ -189,6 +189,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       queryClient.removeQueries({ queryKey: queryKeys.favorites });
       queryClient.removeQueries({ queryKey: ["loans"] });
       queryClient.removeQueries({ queryKey: queryKeys.reservations });
+      queryClient.removeQueries({ queryKey: queryKeys.notifications.all });
       setCurrentView("login");
     };
     window.addEventListener("bookworm:unauthorized", handleUnauthorized);
@@ -197,7 +198,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (adminReviewsQuery.data && canManageLibrary) {
-      setReviews((current) => mergeReviews(current, adminReviewsQuery.data));
+      setReviews((current) => replacePersistedReviews(current, adminReviewsQuery.data));
     }
   }, [adminReviewsQuery.data, canManageLibrary]);
 
@@ -225,19 +226,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await queryClient.invalidateQueries({ queryKey: queryKeys.reservations });
   };
 
+  const refreshNotifications = async () => {
+    await queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
+  };
+
   const refreshAdminReviews = async () => {
     const data = await queryClient.fetchQuery({
       queryKey: queryKeys.adminReviews,
       queryFn: async () => {
-        const response = await reviewsApi.list("VISIBLE");
-        return response.map((review) => ({
-          ...reviewFromBackend(review),
-          flagged: true,
-          flagReason: "Pendiente de moderacion",
-        }));
+        const response = await reviewsApi.list("ALL");
+        return response.map(reviewFromBackend);
       },
     });
-    setReviews((current) => mergeReviews(current, data));
+    setReviews((current) => replacePersistedReviews(current, data));
   };
 
   const refreshReviewsForBook = async (bookId: string) => {
@@ -306,6 +307,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     queryClient.removeQueries({ queryKey: queryKeys.favorites });
     queryClient.removeQueries({ queryKey: ["loans"] });
     queryClient.removeQueries({ queryKey: queryKeys.reservations });
+    queryClient.removeQueries({ queryKey: queryKeys.notifications.all });
     setCurrentView("home");
     await invalidateBooks();
   };
@@ -417,13 +419,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const validationError = firstError(validateLoan({ ...loan, durationMinutes }));
     if (validationError) throw new Error(validationError);
     await loansApi.create(loan.bookId, durationMinutes);
-    await Promise.all([refreshLoans(), refreshReservations(), invalidateBooks()]);
+    await Promise.all([refreshLoans(), refreshReservations(), refreshNotifications(), invalidateBooks()]);
   };
 
   const updateLoan = async (loanId: string, updates: Partial<Loan>) => {
     if (updates.status === "returned") {
       await loansApi.returnLoan(loanId);
-      await Promise.all([refreshLoans(), refreshReservations(), invalidateBooks()]);
+      await Promise.all([refreshLoans(), refreshReservations(), refreshNotifications(), invalidateBooks()]);
     }
   };
 
@@ -431,7 +433,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const validationError = firstError(validateLoan({ bookId: 1, durationMinutes }));
     if (validationError) throw new Error(validationError);
     await loansApi.renew(loanId, durationMinutes);
-    await refreshLoans();
+    await Promise.all([refreshLoans(), refreshNotifications()]);
   };
 
   const getLoanHistory = async (loanId: string) => loansApi.history(loanId);
@@ -440,12 +442,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const validationError = firstError(validateLoan({ bookId, durationMinutes }));
     if (validationError) throw new Error(validationError);
     await reservationsApi.create(bookId, durationMinutes);
-    await Promise.all([refreshReservations(), invalidateBooks()]);
+    await Promise.all([refreshReservations(), refreshNotifications(), invalidateBooks()]);
   };
 
   const cancelReservation = async (reservationId: string) => {
     await reservationsApi.cancel(reservationId);
-    await Promise.all([refreshReservations(), invalidateBooks()]);
+    await Promise.all([refreshReservations(), refreshNotifications(), invalidateBooks()]);
   };
 
   const createBookCopy = async (bookId: string) => {
@@ -604,6 +606,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 function mergeReviews(current: Review[], incoming: Review[]) {
   const incomingIds = new Set(incoming.map((review) => review.id));
   return [...current.filter((review) => !incomingIds.has(review.id)), ...incoming];
+}
+
+function replacePersistedReviews(current: Review[], incoming: Review[]) {
+  return [...current.filter((review) => !isPersistedReviewId(review.id)), ...incoming];
+}
+
+function isPersistedReviewId(reviewId: string) {
+  return /^\d+$/.test(reviewId);
 }
 
 export function useApp() {

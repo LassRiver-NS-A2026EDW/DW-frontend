@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useApp } from "../context/AppContext";
-import { Bell, Moon, Sun, LogOut } from "lucide-react";
+import { Moon, Sun, LogOut } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { NotificationBell } from "../components/notifications/NotificationBell";
 
 export function Topbar() {
   const { currentUser, currentView, theme, toggleTheme, logout, setCurrentView } = useApp();
@@ -40,14 +41,7 @@ export function Topbar() {
           {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
         </Button>
 
-        <Button
-          variant="ghost"
-          size="icon"
-          className="transition-transform duration-200 hover:scale-110"
-          aria-label="Notificaciones"
-        >
-          <Bell className="h-5 w-5" />
-        </Button>
+        <NotificationBell />
 
         {currentUser ? (
           <Button

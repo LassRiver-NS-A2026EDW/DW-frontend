@@ -29,6 +29,7 @@ import { toast } from "sonner";
 import { EmptyState } from "../components/EmptyState";
 import { StatusBadge } from "../components/StatusBadge";
 import { TableSkeleton } from "../components/LoadingSkeleton";
+import { ReviewComment } from "../components/reviews/ReviewComment";
 import { Book } from "../mocks/mockData";
 
 const blankBookForm: Omit<Book, "id"> = {
@@ -76,7 +77,7 @@ export function Admin() {
   const [pdfSourceUrl, setPdfSourceUrl] = useState("");
 
   useEffect(() => {
-    if (currentUser?.role !== "admin") return;
+    if (currentUser?.role !== "admin" && currentUser?.role !== "librarian") return;
     refreshLoans();
     if (activeTab === "reviews") {
       refreshAdminReviews();
@@ -97,16 +98,18 @@ export function Admin() {
     );
   }
 
+  const adminReviews = reviews.filter((review) => isPersistedReviewId(review.id));
+  const hiddenReviews = adminReviews.filter((review) => review.flagged);
+
   const stats = {
     totalBooks: books.length,
     activeLoans: loans.filter((l) => l.status === "active").length,
     overdueLoans: loans.filter((l) => l.status === "overdue").length,
-    flaggedReviews: reviews.filter((r) => r.flagged).length,
+    flaggedReviews: hiddenReviews.length,
   };
 
   const activeLoans = loans.filter((l) => l.status === "active");
   const overdueLoans = loans.filter((l) => l.status === "overdue");
-  const flaggedReviews = reviews.filter((r) => r.flagged);
 
   const openAddBook = () => {
     setEditingBook(null);
@@ -235,7 +238,7 @@ export function Admin() {
                   </div>
                   <div>
                     <p className="text-2xl font-bold">{stats.flaggedReviews}</p>
-                    <p className="text-sm text-muted-foreground">Reseñas Marcadas</p>
+                    <p className="text-sm text-muted-foreground">Reseñas Ocultas</p>
                   </div>
                 </CardContent>
               </Card>
@@ -394,50 +397,70 @@ export function Admin() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Reseñas Marcadas ({flaggedReviews.length})</CardTitle>
+                <CardTitle>Reseñas Registradas ({adminReviews.length})</CardTitle>
               </CardHeader>
               <CardContent>
-                {flaggedReviews.length === 0 ? (
+                {adminReviews.length === 0 ? (
                   <p className="text-center text-muted-foreground py-8">
-                    No hay reseñas marcadas para revisar
+                    No hay reseñas registradas para revisar
                   </p>
                 ) : (
                   <div className="space-y-4">
-                    {flaggedReviews.map((review) => (
-                      <div key={review.id} className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+                    {adminReviews.map((review) => (
+                      <div
+                        key={review.id}
+                        className={`p-4 rounded-lg border ${
+                          review.flagged
+                            ? "bg-destructive/10 border-destructive/20"
+                            : "bg-card border-border"
+                        }`}
+                      >
                         <div className="flex items-start justify-between mb-2">
-                          <div>
+                          <div className="min-w-0">
                             <p className="font-medium">{review.userName}</p>
                             <p className="text-sm text-muted-foreground">
                               Rating: {review.rating}/5 • {review.date}
                             </p>
-                            <Badge variant="destructive" className="mt-2">
-                              {review.flagReason}
+                            <Badge variant={review.flagged ? "destructive" : "secondary"} className="mt-2">
+                              {review.flagged ? "Oculta" : "Visible"}
                             </Badge>
                           </div>
                         </div>
-                        <p className="text-sm my-3">{review.comment}</p>
+                        <div className="my-3 text-sm">
+                          <ReviewComment>{review.comment}</ReviewComment>
+                        </div>
                         <div className="flex gap-2">
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={async () => {
-                              await hideReview(review.id);
-                              toast.success("Reseña ocultada");
-                            }}
-                          >
-                            Ocultar Reseña
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={async () => {
-                              await keepReviewVisible(review.id);
-                              toast.success("Reseña mantenida visible");
-                            }}
-                          >
-                            Mantener Visible
-                          </Button>
+                          {review.flagged ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={async () => {
+                                try {
+                                  await keepReviewVisible(review.id);
+                                  toast.success("Reseña visible nuevamente");
+                                } catch (err: any) {
+                                  toast.error(err?.message || "No se pudo mostrar la reseña");
+                                }
+                              }}
+                            >
+                              Mostrar Reseña
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={async () => {
+                                try {
+                                  await hideReview(review.id);
+                                  toast.success("Reseña ocultada");
+                                } catch (err: any) {
+                                  toast.error(err?.message || "No se pudo ocultar la reseña");
+                                }
+                              }}
+                            >
+                              Ocultar Reseña
+                            </Button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -529,4 +552,8 @@ export function Admin() {
       </div>
     </div>
   );
+}
+
+function isPersistedReviewId(reviewId: string) {
+  return /^\d+$/.test(reviewId);
 }
