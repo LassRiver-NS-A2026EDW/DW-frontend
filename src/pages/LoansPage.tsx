@@ -1,14 +1,19 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useApp } from "../context/AppContext";
 import { Button } from "../components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { EmptyState } from "../components/EmptyState";
-import { StatusBadge } from "../components/StatusBadge";
+import { LoanCard } from "../components/LoanCard";
+import { LoanDurationSelect } from "../components/LoanDurationSelect";
 import { BookOpen, LogIn } from "lucide-react";
 import { toast } from "sonner";
+import type { LoanRenewalResponse } from "../api/loans";
 
 export function Loans() {
-  const { currentUser, loans, refreshLoans, updateLoan, setCurrentView } = useApp();
+  const { currentUser, loans, refreshLoans, updateLoan, renewLoan, getLoanHistory, setCurrentView } = useApp();
+  const [renewLoanId, setRenewLoanId] = useState<string | null>(null);
+  const [renewDurationMinutes, setRenewDurationMinutes] = useState(1440);
+  const [historyByLoan, setHistoryByLoan] = useState<Record<string, LoanRenewalResponse[]>>({});
 
   useEffect(() => {
     if (currentUser) {
@@ -39,6 +44,31 @@ export function Loans() {
     }
   };
 
+  const openRenewDialog = async (loanId: string) => {
+    setRenewLoanId(loanId);
+    try {
+      const history = await getLoanHistory(loanId);
+      setHistoryByLoan((current) => ({ ...current, [loanId]: history }));
+    } catch {
+      setHistoryByLoan((current) => ({ ...current, [loanId]: [] }));
+    }
+  };
+
+  const handleRenew = async () => {
+    if (!renewLoanId) return;
+    try {
+      await renewLoan(renewLoanId, renewDurationMinutes);
+      const history = await getLoanHistory(renewLoanId);
+      setHistoryByLoan((current) => ({ ...current, [renewLoanId]: history }));
+      toast.success("Prestamo renovado correctamente");
+      setRenewLoanId(null);
+    } catch (err: any) {
+      toast.error(err?.message || "No se pudo renovar el prestamo");
+    }
+  };
+
+  const selectedLoan = renewLoanId ? loans.find((loan) => loan.id === renewLoanId) : null;
+
   return (
     <div className="flex-1 overflow-auto">
       <div className="p-6 space-y-6">
@@ -58,30 +88,49 @@ export function Loans() {
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {loans.map((loan) => (
-              <Card key={loan.id}>
-                <CardHeader>
-                  <CardTitle className="flex items-start justify-between gap-3">
-                    <span>{loan.bookTitle}</span>
-                    <StatusBadge status={loan.status} />
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <p className="text-sm text-muted-foreground">Prestado: {loan.loanDate}</p>
-                  <p className="text-sm text-muted-foreground">Vence: {loan.dueDate}</p>
-                  {loan.returnDate && (
-                    <p className="text-sm text-muted-foreground">Devuelto: {loan.returnDate}</p>
-                  )}
-                  {loan.status !== "returned" && (
-                    <Button variant="outline" size="sm" onClick={() => handleReturn(loan.id)}>
-                      Marcar como devuelto
-                    </Button>
-                  )}
-                </CardContent>
-              </Card>
+              <LoanCard key={loan.id} loan={loan} onReturn={handleReturn} onRenew={openRenewDialog} />
             ))}
           </div>
         )}
       </div>
+
+      <Dialog open={Boolean(renewLoanId)} onOpenChange={(open) => !open && setRenewLoanId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Renovar prestamo</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {selectedLoan && (
+              <div className="rounded-md border border-border p-3 text-sm text-muted-foreground">
+                <p className="font-medium text-foreground">{selectedLoan.bookTitle}</p>
+                <p>Vencimiento actual: {selectedLoan.dueDate}</p>
+                <p>Renovaciones usadas: {selectedLoan.renewalCount ?? 0}/2</p>
+              </div>
+            )}
+            <LoanDurationSelect
+              value={renewDurationMinutes}
+              onChange={setRenewDurationMinutes}
+              label="Duracion de la renovacion"
+            />
+            {renewLoanId && (historyByLoan[renewLoanId]?.length ?? 0) > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Historial</p>
+                {historyByLoan[renewLoanId].map((renewal) => (
+                  <div key={renewal.id} className="rounded-md bg-muted/30 p-2 text-xs text-muted-foreground">
+                    {renewal.previousDueDate.replace("T", " ").slice(0, 16)} {"->"} {renewal.newDueDate.replace("T", " ").slice(0, 16)}
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setRenewLoanId(null)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleRenew}>Renovar</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

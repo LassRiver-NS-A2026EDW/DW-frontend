@@ -10,12 +10,13 @@ import { EmptyState } from "../components/EmptyState";
 import { BookGridSkeleton } from "../components/LoadingSkeleton";
 import { RatingStars } from "../components/RatingStars";
 import { AuthRequiredDialog } from "../components/AuthRequiredDialog";
-import * as Select from "@radix-ui/react-select";
-import { SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import { BookFilters } from "../components/BookFilters";
 
 export function Catalog() {
   const {
     books,
+    bookCategories,
+    bookLanguages,
     booksLoading,
     bookPage,
     bookTotalElements,
@@ -48,8 +49,8 @@ export function Catalog() {
     });
   }, [books, ratingFilter]);
 
-  const categories = ["all", ...Array.from(new Set(books.map((b) => b.category)))];
-  const languages = ["all", ...Array.from(new Set(books.map((b) => b.language)))];
+  const categories = bookCategories;
+  const languages = bookLanguages;
 
   const handleFavoriteToggle = async (bookId: string) => {
     if (!currentUser) {
@@ -103,68 +104,18 @@ export function Catalog() {
         </div>
 
         {showFilters && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 bg-card p-6 rounded-2xl border border-border shadow-sm mb-6">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Categoría</label>
-              <Select.Root value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar categoría" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((cat) => (
-                    <SelectItem key={cat} value={cat}>
-                      {cat === "all" ? "Todas las categorías" : cat}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select.Root>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Idioma</label>
-              <Select.Root value={languageFilter} onValueChange={setLanguageFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar idioma" />
-                </SelectTrigger>
-                <SelectContent>
-                  {languages.map((lang) => (
-                    <SelectItem key={lang} value={lang}>
-                      {lang === "all" ? "Todos los idiomas" : lang}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select.Root>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Rating Mínimo</label>
-              <Select.Root value={ratingFilter} onValueChange={setRatingFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Cualquier rating" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Cualquier rating</SelectItem>
-                  <SelectItem value="4">4+ estrellas</SelectItem>
-                  <SelectItem value="4.5">4.5+ estrellas</SelectItem>
-                  <SelectItem value="4.7">4.7+ estrellas</SelectItem>
-                </SelectContent>
-              </Select.Root>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Disponibilidad</label>
-              <Select.Root value={availabilityFilter} onValueChange={setAvailabilityFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Todos" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="available">Disponibles</SelectItem>
-                  <SelectItem value="unavailable">No disponibles</SelectItem>
-                </SelectContent>
-              </Select.Root>
-            </div>
-          </div>
+          <BookFilters
+            categories={categories}
+            languages={languages}
+            categoryFilter={categoryFilter}
+            languageFilter={languageFilter}
+            ratingFilter={ratingFilter}
+            availabilityFilter={availabilityFilter}
+            onCategoryChange={setCategoryFilter}
+            onLanguageChange={setLanguageFilter}
+            onRatingChange={setRatingFilter}
+            onAvailabilityChange={setAvailabilityFilter}
+          />
         )}
 
         <div className="flex items-center justify-between">

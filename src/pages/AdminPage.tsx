@@ -58,6 +58,7 @@ export function Admin() {
     deleteBook,
     uploadBookPdf,
     downloadBookPdf,
+    createBookCopy,
     updateLoan,
     hideReview,
     keepReviewVisible,
@@ -260,6 +261,7 @@ export function Admin() {
                     <TableHead>Autor</TableHead>
                     <TableHead>Categoría</TableHead>
                     <TableHead>ISBN</TableHead>
+                    <TableHead>Ejemplares</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead>Acciones</TableHead>
                   </TableRow>
@@ -271,8 +273,9 @@ export function Admin() {
                       <TableCell>{book.author}</TableCell>
                       <TableCell>{book.category}</TableCell>
                       <TableCell>{book.isbn}</TableCell>
+                      <TableCell>{book.availableCopies ?? 0}/{book.totalCopies ?? 0}</TableCell>
                       <TableCell>
-                        <StatusBadge status={book.available ? "available" : "unavailable"} />
+                        <StatusBadge status={(book.active ?? book.available) ? "available" : "unavailable"} />
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-2">
@@ -289,18 +292,33 @@ export function Admin() {
                             size="icon"
                             onClick={async () => {
                               try {
-                                await updateBook(book.id, { available: !book.available });
+                                await updateBook(book.id, { available: !(book.active ?? book.available) });
                                 toast.success("Estado actualizado");
                               } catch (err: any) {
                                 toast.error(err?.message || "No se pudo actualizar el estado");
                               }
                             }}
                           >
-                            {book.available ? (
+                            {(book.active ?? book.available) ? (
                               <XCircle className="h-4 w-4" />
                             ) : (
                               <CheckCircle className="h-4 w-4" />
                             )}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={async () => {
+                              try {
+                                await createBookCopy(book.id);
+                                toast.success("Ejemplar agregado");
+                              } catch (err: any) {
+                                toast.error(err?.message || "No se pudo agregar el ejemplar");
+                              }
+                            }}
+                            aria-label="Agregar ejemplar"
+                          >
+                            <Plus className="h-4 w-4" />
                           </Button>
                         </div>
                       </TableCell>

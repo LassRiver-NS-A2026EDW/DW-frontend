@@ -2,7 +2,7 @@
 import { CheckCircle, XCircle, Clock, AlertCircle } from "lucide-react";
 
 interface StatusBadgeProps {
-  status: "active" | "overdue" | "returned" | "available" | "unavailable";
+  status: "active" | "overdue" | "returned" | "available" | "unavailable" | "waiting" | "fulfilled" | "cancelled";
 }
 
 export function StatusBadge({ status }: StatusBadgeProps) {
@@ -31,6 +31,21 @@ export function StatusBadge({ status }: StatusBadgeProps) {
       label: "No disponible",
       icon: XCircle,
       variant: "destructive" as const,
+    },
+    waiting: {
+      label: "En cola",
+      icon: Clock,
+      variant: "outline" as const,
+    },
+    fulfilled: {
+      label: "Asignada",
+      icon: CheckCircle,
+      variant: "default" as const,
+    },
+    cancelled: {
+      label: "Cancelada",
+      icon: XCircle,
+      variant: "secondary" as const,
     },
   };
 

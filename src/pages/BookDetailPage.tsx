@@ -12,6 +12,7 @@ import { BookDetailSkeleton } from "../components/LoadingSkeleton";
 import { EmptyState } from "../components/EmptyState";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { AuthRequiredDialog } from "../components/AuthRequiredDialog";
+import { LoanDurationSelect } from "../components/LoanDurationSelect";
 import { firstError, validateLoan, validateReview } from "../utils/validation";
 
 export function BookDetail() {
@@ -26,11 +27,14 @@ export function BookDetail() {
     addLoan,
     updateLoan,
     deleteReview,
+    reservations,
+    createReservation,
     setCurrentView,
   } = useApp();
 
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
+  const [loanDurationMinutes, setLoanDurationMinutes] = useState(1440);
   const [loading] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
@@ -48,6 +52,12 @@ export function BookDetail() {
       loan.bookId === selectedBook.id &&
       loan.userId === currentUser?.id &&
       (loan.status === "active" || loan.status === "overdue")
+  );
+  const waitingReservation = reservations.find(
+    (reservation) =>
+      reservation.bookId === selectedBook.id &&
+      reservation.userId === currentUser?.id &&
+      reservation.status === "waiting"
   );
 
   const requireAuth = (action: string) => {
@@ -123,24 +133,45 @@ export function BookDetail() {
       requireAuth("reservar libros");
       return;
     }
-    const validationError = firstError(validateLoan({ bookId: selectedBook.id }));
+    const validationError = firstError(validateLoan({ bookId: selectedBook.id, durationMinutes: loanDurationMinutes }));
     if (validationError) {
       toast.error(validationError);
       return;
     }
     try {
-      await addLoan({
-        bookId: selectedBook.id,
-        bookTitle: selectedBook.title,
-        userId: currentUser.id,
-        userName: currentUser.name,
-        loanDate: new Date().toISOString().split("T")[0],
-        dueDate: "",
-        status: "active",
-      });
+      await addLoan(
+        {
+          bookId: selectedBook.id,
+          bookTitle: selectedBook.title,
+          userId: currentUser.id,
+          userName: currentUser.name,
+          loanDate: new Date().toISOString().split("T")[0],
+          dueDate: "",
+          status: "active",
+        },
+        loanDurationMinutes
+      );
       toast.success("Libro reservado correctamente");
     } catch (err: any) {
       toast.error(err?.message || "No se pudo reservar el libro");
+    }
+  };
+
+  const handleQueueReservation = async () => {
+    if (!currentUser) {
+      requireAuth("unirte a la cola de reservas");
+      return;
+    }
+    const validationError = firstError(validateLoan({ bookId: selectedBook.id, durationMinutes: loanDurationMinutes }));
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+    try {
+      await createReservation(selectedBook.id, loanDurationMinutes);
+      toast.success("Te agregamos a la cola de reservas");
+    } catch (err: any) {
+      toast.error(err?.message || "No se pudo crear la reserva en cola");
     }
   };
 
@@ -162,7 +193,7 @@ export function BookDetail() {
       requireAuth("leer este libro");
       return;
     }
-    if (!selectedBook.isReservedByMe && currentUser.role !== "admin" && currentUser.role !== "librarian") {
+    if (!activeLoan && !selectedBook.isReservedByMe && currentUser.role !== "admin" && currentUser.role !== "librarian") {
       toast.error("Necesitas un prestamo activo para leer este libro");
       return;
     }
@@ -214,9 +245,32 @@ export function BookDetail() {
                   />
                   {favorites.includes(selectedBook.id) ? "En Favoritos" : "Agregar a Favoritos"}
                 </Button>
+                <LoanDurationSelect value={loanDurationMinutes} onChange={setLoanDurationMinutes} />
+                <div className="grid grid-cols-3 gap-2 rounded-md border border-border p-2 text-center text-xs">
+                  <div>
+                    <p className="font-semibold">{selectedBook.totalCopies ?? 0}</p>
+                    <p className="text-muted-foreground">Total</p>
+                  </div>
+                  <div>
+                    <p className="font-semibold">{selectedBook.availableCopies ?? 0}</p>
+                    <p className="text-muted-foreground">Libres</p>
+                  </div>
+                  <div>
+                    <p className="font-semibold">{selectedBook.waitingReservations ?? 0}</p>
+                    <p className="text-muted-foreground">Cola</p>
+                  </div>
+                </div>
                 {activeLoan || selectedBook.isReservedByMe ? (
                   <Button className="w-full" variant="destructive" onClick={handleReturn} disabled={!activeLoan}>
                     Devolver Libro
+                  </Button>
+                ) : waitingReservation ? (
+                  <Button className="w-full" variant="outline" disabled>
+                    En cola #{waitingReservation.queuePosition ?? "-"}
+                  </Button>
+                ) : !selectedBook.available && (selectedBook.totalCopies ?? 0) > 0 ? (
+                  <Button className="w-full" variant="outline" onClick={handleQueueReservation}>
+                    Unirme a la cola
                   </Button>
                 ) : (
                   <Button
@@ -233,10 +287,10 @@ export function BookDetail() {
                     className="w-full"
                     variant="secondary"
                     onClick={handleReadPdf}
-                    disabled={!selectedBook.isReservedByMe && currentUser?.role !== "admin" && currentUser?.role !== "librarian"}
+                    disabled={!activeLoan && !selectedBook.isReservedByMe && currentUser?.role !== "admin" && currentUser?.role !== "librarian"}
                   >
                     <FileText className="h-4 w-4 mr-2" />
-                    {!selectedBook.isReservedByMe && currentUser?.role !== "admin" && currentUser?.role !== "librarian"
+                    {!activeLoan && !selectedBook.isReservedByMe && currentUser?.role !== "admin" && currentUser?.role !== "librarian"
                       ? "Requiere prestamo activo"
                       : "Leer PDF"}
                   </Button>

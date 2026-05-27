@@ -113,9 +113,14 @@ export function validateReview(input: { bookId: string | number; rating: number;
   return errors;
 }
 
-export function validateLoan(input: { bookId: string | number }): string[] {
+export function validateLoan(input: { bookId: string | number; durationMinutes?: number }): string[] {
   const errors: string[] = [];
   pushIf(errors, !isPositiveInteger(input.bookId), "El libro es obligatorio");
+  if (input.durationMinutes !== undefined) {
+    pushIf(errors, !Number.isInteger(Number(input.durationMinutes)), "La duracion debe ser un numero entero");
+    pushIf(errors, Number(input.durationMinutes) < 5, "La duracion minima del prestamo es 5 minutos");
+    pushIf(errors, Number(input.durationMinutes) > 10080, "La duracion maxima del prestamo es una semana");
+  }
   return errors;
 }
 

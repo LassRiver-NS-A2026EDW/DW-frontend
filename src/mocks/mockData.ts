@@ -12,10 +12,14 @@ export interface Book {
   coverUrl: string;
   rating: number;
   available: boolean;
+  active?: boolean;
   reviewCount: number;
   hasPdf?: boolean;
   pdfUrl?: string | null;
   isReservedByMe?: boolean;
+  totalCopies?: number;
+  availableCopies?: number;
+  waitingReservations?: number;
 }
 
 export interface Review {
@@ -47,6 +51,26 @@ export interface Loan {
   dueDate: string;
   returnDate?: string;
   status: "active" | "overdue" | "returned";
+  copyId?: string | null;
+  copyCode?: string | null;
+  renewalCount?: number;
+  canRenew?: boolean;
+  blockedReason?: string | null;
+}
+
+export interface Reservation {
+  id: string;
+  bookId: string;
+  bookTitle: string;
+  userId: string;
+  userEmail: string;
+  status: "waiting" | "fulfilled" | "cancelled";
+  requestedLoanDurationMinutes: number;
+  queuePosition?: number | null;
+  fulfilledLoanId?: string | null;
+  createdAt: string;
+  fulfilledAt?: string | null;
+  cancelledAt?: string | null;
 }
 
 export const mockBooks: Book[] = [
