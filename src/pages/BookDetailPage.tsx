@@ -1,18 +1,14 @@
 import { useState } from "react";
+import { ArrowLeft } from "lucide-react";
+import { toast } from "sonner";
 import { useApp } from "../context/AppContext";
 import { Button } from "../components/ui/button";
-import { Textarea } from "../components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
-import { Badge } from "../components/ui/badge";
-import { ArrowLeft, Heart, Calendar, BookOpen, Globe, Building2, LogIn, FileText } from "lucide-react";
-import { toast } from "sonner";
-import { RatingStars } from "../components/RatingStars";
-import { StatusBadge } from "../components/StatusBadge";
 import { BookDetailSkeleton } from "../components/LoadingSkeleton";
-import { EmptyState } from "../components/EmptyState";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { AuthRequiredDialog } from "../components/AuthRequiredDialog";
-import { LoanDurationSelect } from "../components/LoanDurationSelect";
+import { BookActionPanel } from "../components/book-detail/BookActionPanel";
+import { BookOverview } from "../components/book-detail/BookOverview";
+import { ReviewSection } from "../components/book-detail/ReviewSection";
 import { firstError, validateLoan, validateReview } from "../utils/validation";
 
 export function BookDetail() {
@@ -38,15 +34,15 @@ export function BookDetail() {
   const [loading] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
-  const [authAction, setAuthAction] = useState<string>("");
+  const [authAction, setAuthAction] = useState("");
 
   if (!selectedBook) {
     setCurrentView("catalog");
     return null;
   }
 
-  const bookReviews = reviews.filter((r) => r.bookId === selectedBook.id);
-  const userReview = bookReviews.find((r) => r.userId === currentUser?.id);
+  const bookReviews = reviews.filter((review) => review.bookId === selectedBook.id);
+  const userReview = bookReviews.find((review) => review.userId === currentUser?.id);
   const activeLoan = loans.find(
     (loan) =>
       loan.bookId === selectedBook.id &&
@@ -67,7 +63,7 @@ export function BookDetail() {
 
   const handleSubmitReview = async () => {
     if (!currentUser) {
-      requireAuth("escribir una reseña");
+      requireAuth("escribir una resena");
       return;
     }
     if (!comment.trim()) {
@@ -78,6 +74,7 @@ export function BookDetail() {
       toast.error("El comentario no puede superar los 2000 caracteres");
       return;
     }
+
     const validationError = firstError(
       validateReview({
         bookId: selectedBook.id,
@@ -89,6 +86,7 @@ export function BookDetail() {
       toast.error(validationError);
       return;
     }
+
     try {
       await addReview({
         bookId: selectedBook.id,
@@ -109,7 +107,7 @@ export function BookDetail() {
   const confirmDeleteReview = () => {
     if (userReview) {
       deleteReview(userReview.id);
-      toast.success("Reseña eliminada correctamente");
+      toast.success("Resena eliminada correctamente");
     }
     setConfirmDeleteOpen(false);
   };
@@ -119,6 +117,7 @@ export function BookDetail() {
       requireAuth("agregar libros a favoritos");
       return;
     }
+
     const isFavorite = favorites.includes(selectedBook.id);
     try {
       await toggleFavorite(selectedBook.id);
@@ -133,11 +132,13 @@ export function BookDetail() {
       requireAuth("reservar libros");
       return;
     }
+
     const validationError = firstError(validateLoan({ bookId: selectedBook.id, durationMinutes: loanDurationMinutes }));
     if (validationError) {
       toast.error(validationError);
       return;
     }
+
     try {
       await addLoan(
         {
@@ -162,11 +163,13 @@ export function BookDetail() {
       requireAuth("unirte a la cola de reservas");
       return;
     }
+
     const validationError = firstError(validateLoan({ bookId: selectedBook.id, durationMinutes: loanDurationMinutes }));
     if (validationError) {
       toast.error(validationError);
       return;
     }
+
     try {
       await createReservation(selectedBook.id, loanDurationMinutes);
       toast.success("Te agregamos a la cola de reservas");
@@ -176,7 +179,10 @@ export function BookDetail() {
   };
 
   const handleReturn = async () => {
-    if (!activeLoan) return;
+    if (!activeLoan) {
+      return;
+    }
+
     try {
       await updateLoan(activeLoan.id, {
         status: "returned",
@@ -193,10 +199,12 @@ export function BookDetail() {
       requireAuth("leer este libro");
       return;
     }
+
     if (!activeLoan && !selectedBook.isReservedByMe && currentUser.role !== "admin" && currentUser.role !== "librarian") {
       toast.error("Necesitas un prestamo activo para leer este libro");
       return;
     }
+
     setCurrentView("book-reader");
   };
 
@@ -204,10 +212,7 @@ export function BookDetail() {
     return (
       <div className="flex-1 overflow-auto">
         <div className="p-6 space-y-6">
-          <Button variant="ghost" onClick={() => setCurrentView("catalog")}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Volver al catálogo
-          </Button>
+          <BackToCatalogButton onBack={() => setCurrentView("catalog")} />
           <BookDetailSkeleton />
         </div>
       </div>
@@ -217,236 +222,40 @@ export function BookDetail() {
   return (
     <div className="flex-1 overflow-auto">
       <div className="p-6 space-y-6">
-        <Button variant="ghost" onClick={() => setCurrentView("catalog")}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Volver al catálogo
-        </Button>
+        <BackToCatalogButton onBack={() => setCurrentView("catalog")} />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-1">
-            <Card className="overflow-hidden sticky top-6">
-              <div className="aspect-[3/4] bg-muted">
-                <img
-                  src={selectedBook.coverUrl}
-                  alt={selectedBook.title}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <CardContent className="p-4 space-y-3">
-                <Button
-                  className="w-full"
-                  variant={favorites.includes(selectedBook.id) ? "secondary" : "default"}
-                  onClick={handleFavoriteToggle}
-                >
-                  <Heart
-                    className={`h-4 w-4 mr-2 ${
-                      favorites.includes(selectedBook.id) ? "fill-current" : ""
-                    }`}
-                  />
-                  {favorites.includes(selectedBook.id) ? "En Favoritos" : "Agregar a Favoritos"}
-                </Button>
-                <LoanDurationSelect value={loanDurationMinutes} onChange={setLoanDurationMinutes} />
-                <div className="grid grid-cols-3 gap-2 rounded-md border border-border p-2 text-center text-xs">
-                  <div>
-                    <p className="font-semibold">{selectedBook.totalCopies ?? 0}</p>
-                    <p className="text-muted-foreground">Total</p>
-                  </div>
-                  <div>
-                    <p className="font-semibold">{selectedBook.availableCopies ?? 0}</p>
-                    <p className="text-muted-foreground">Libres</p>
-                  </div>
-                  <div>
-                    <p className="font-semibold">{selectedBook.waitingReservations ?? 0}</p>
-                    <p className="text-muted-foreground">Cola</p>
-                  </div>
-                </div>
-                {activeLoan || selectedBook.isReservedByMe ? (
-                  <Button className="w-full" variant="destructive" onClick={handleReturn} disabled={!activeLoan}>
-                    Devolver Libro
-                  </Button>
-                ) : waitingReservation ? (
-                  <Button className="w-full" variant="outline" disabled>
-                    En cola #{waitingReservation.queuePosition ?? "-"}
-                  </Button>
-                ) : !selectedBook.available && (selectedBook.totalCopies ?? 0) > 0 ? (
-                  <Button className="w-full" variant="outline" onClick={handleQueueReservation}>
-                    Unirme a la cola
-                  </Button>
-                ) : (
-                  <Button
-                    className="w-full"
-                    variant="outline"
-                    disabled={!selectedBook.available}
-                    onClick={handleReserve}
-                  >
-                    {selectedBook.available ? "Reservar Libro" : "No Disponible"}
-                  </Button>
-                )}
-                {selectedBook.hasPdf ? (
-                  <Button
-                    className="w-full"
-                    variant="secondary"
-                    onClick={handleReadPdf}
-                    disabled={!activeLoan && !selectedBook.isReservedByMe && currentUser?.role !== "admin" && currentUser?.role !== "librarian"}
-                  >
-                    <FileText className="h-4 w-4 mr-2" />
-                    {!activeLoan && !selectedBook.isReservedByMe && currentUser?.role !== "admin" && currentUser?.role !== "librarian"
-                      ? "Requiere prestamo activo"
-                      : "Leer PDF"}
-                  </Button>
-                ) : (
-                  <Button className="w-full" variant="outline" disabled>
-                    <FileText className="h-4 w-4 mr-2" />
-                    Sin PDF disponible
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
+            <BookActionPanel
+              book={selectedBook}
+              activeLoan={activeLoan}
+              waitingReservation={waitingReservation}
+              isFavorite={favorites.includes(selectedBook.id)}
+              userRole={currentUser?.role}
+              loanDurationMinutes={loanDurationMinutes}
+              onLoanDurationChange={setLoanDurationMinutes}
+              onFavoriteToggle={handleFavoriteToggle}
+              onReturn={handleReturn}
+              onReserve={handleReserve}
+              onQueueReservation={handleQueueReservation}
+              onReadPdf={handleReadPdf}
+            />
           </div>
 
           <div className="lg:col-span-2 space-y-6">
-            <div>
-              <h1 className="text-3xl font-bold text-foreground mb-2">{selectedBook.title}</h1>
-              <p className="text-xl text-muted-foreground mb-4">{selectedBook.author}</p>
-
-              <div className="flex items-center gap-4 mb-6">
-                <RatingStars rating={selectedBook.rating} readonly size="lg" showLabel />
-                <span className="text-sm text-muted-foreground">
-                  ({selectedBook.reviewCount} reseñas)
-                </span>
-                <StatusBadge status={selectedBook.available ? "available" : "unavailable"} />
-              </div>
-
-              <div className="flex flex-wrap gap-2 mb-6">
-                <Badge variant="default">{selectedBook.category}</Badge>
-                <Badge variant="secondary">{selectedBook.language}</Badge>
-              </div>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Detalles del Libro</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex items-start gap-3">
-                    <Building2 className="h-5 w-5 text-muted-foreground mt-0.5" />
-                    <div>
-                      <p className="text-sm font-medium">Editorial</p>
-                      <p className="text-sm text-muted-foreground">{selectedBook.publisher}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <Calendar className="h-5 w-5 text-muted-foreground mt-0.5" />
-                    <div>
-                      <p className="text-sm font-medium">Fecha de Publicación</p>
-                      <p className="text-sm text-muted-foreground">
-                        {new Date(selectedBook.publishDate).toLocaleDateString("es-ES", {
-                          year: "numeric",
-                          month: "long",
-                          day: "numeric",
-                        })}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <BookOpen className="h-5 w-5 text-muted-foreground mt-0.5" />
-                    <div>
-                      <p className="text-sm font-medium">Páginas</p>
-                      <p className="text-sm text-muted-foreground">{selectedBook.pages}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <Globe className="h-5 w-5 text-muted-foreground mt-0.5" />
-                    <div>
-                      <p className="text-sm font-medium">ISBN</p>
-                      <p className="text-sm text-muted-foreground">{selectedBook.isbn}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="mt-6">
-                <CardHeader>
-                  <CardTitle>Descripción</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground leading-relaxed">{selectedBook.description}</p>
-                </CardContent>
-              </Card>
-            </div>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Reseñas</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {currentUser && !userReview && (
-                  <div className="space-y-4 p-6 bg-muted/30 rounded-xl border border-border">
-                    <div>
-                      <label className="text-sm font-medium mb-3 block">Tu Calificación</label>
-                      <RatingStars
-                        rating={rating}
-                        onRatingChange={setRating}
-                        size="lg"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">
-                        Tu Reseña ({comment.length}/2000)
-                      </label>
-                      <Textarea
-                        placeholder="Comparte tu opinión sobre este libro..."
-                        value={comment}
-                        onChange={(e) => setComment(e.target.value.slice(0, 2000))}
-                        rows={4}
-                      />
-                    </div>
-                    <Button onClick={handleSubmitReview}>Publicar Reseña</Button>
-                  </div>
-                )}
-
-                {!currentUser && (
-                  <EmptyState
-                    icon={LogIn}
-                    title="Inicia sesión para escribir reseñas"
-                    description="Comparte tu opinión sobre este libro con la comunidad"
-                    actionLabel="Iniciar Sesión"
-                    onAction={() => setCurrentView("login")}
-                  />
-                )}
-
-                <div className="space-y-4">
-                  {bookReviews.map((review) => (
-                    <div key={review.id} className="p-5 bg-card border border-border rounded-xl hover:shadow-md transition-shadow">
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex-1">
-                          <p className="font-semibold text-foreground">{review.userName}</p>
-                          <div className="flex items-center gap-3 mt-2">
-                            <RatingStars rating={review.rating} readonly size="sm" />
-                            <span className="text-xs text-muted-foreground">{review.date}</span>
-                          </div>
-                        </div>
-                        {currentUser?.id === review.userId && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setConfirmDeleteOpen(true)}
-                            className="text-destructive hover:text-destructive hover:bg-destructive/10 transition-colors duration-200"
-                          >
-                            Eliminar
-                          </Button>
-                        )}
-                      </div>
-                      <p className="text-muted-foreground leading-relaxed">{review.comment}</p>
-                    </div>
-                  ))}
-                  {bookReviews.length === 0 && (
-                    <p className="text-center text-muted-foreground py-8">
-                      No hay reseñas aún. Sé el primero en escribir una.
-                    </p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+            <BookOverview book={selectedBook} />
+            <ReviewSection
+              reviews={bookReviews}
+              currentUser={currentUser}
+              userReview={userReview}
+              rating={rating}
+              comment={comment}
+              onRatingChange={setRating}
+              onCommentChange={setComment}
+              onSubmitReview={handleSubmitReview}
+              onRequestLogin={() => setCurrentView("login")}
+              onRequestDeleteReview={() => setConfirmDeleteOpen(true)}
+            />
           </div>
         </div>
       </div>
@@ -454,18 +263,23 @@ export function BookDetail() {
       <ConfirmDialog
         open={confirmDeleteOpen}
         onOpenChange={setConfirmDeleteOpen}
-        title="¿Eliminar reseña?"
-        description="Esta acción no se puede deshacer. Tu reseña será eliminada permanentemente."
+        title="Eliminar resena?"
+        description="Esta accion no se puede deshacer. Tu resena sera eliminada permanentemente."
         confirmLabel="Eliminar"
         destructive
         onConfirm={confirmDeleteReview}
       />
 
-      <AuthRequiredDialog
-        open={authDialogOpen}
-        onOpenChange={setAuthDialogOpen}
-        action={authAction}
-      />
+      <AuthRequiredDialog open={authDialogOpen} onOpenChange={setAuthDialogOpen} action={authAction} />
     </div>
+  );
+}
+
+function BackToCatalogButton({ onBack }: { onBack: () => void }) {
+  return (
+    <Button variant="ghost" onClick={onBack}>
+      <ArrowLeft className="h-4 w-4 mr-2" />
+      Volver al catalogo
+    </Button>
   );
 }

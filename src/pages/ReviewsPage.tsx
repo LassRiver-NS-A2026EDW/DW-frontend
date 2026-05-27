@@ -5,6 +5,7 @@ import { Badge } from "../components/ui/badge";
 import { MessageSquare, LogIn } from "lucide-react";
 import { EmptyState } from "../components/EmptyState";
 import { RatingStars } from "../components/RatingStars";
+import { ReviewComment } from "../components/reviews/ReviewComment";
 
 export function Reviews() {
   const { currentUser, reviews, books, setCurrentView, setSelectedBook } = useApp();
@@ -58,12 +59,12 @@ export function Reviews() {
               if (!book) return null;
 
               return (
-                <Card key={review.id} className="hover:shadow-lg transition-shadow">
+                <Card key={review.id} className="min-w-0 overflow-hidden hover:shadow-lg transition-shadow">
                   <CardHeader>
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0 flex-1">
                         <CardTitle
-                          className="cursor-pointer hover:text-primary transition-colors text-lg"
+                          className="cursor-pointer hover:text-primary transition-colors text-lg break-words"
                           onClick={() => handleBookClick(book.id)}
                         >
                           {book.title}
@@ -74,8 +75,8 @@ export function Reviews() {
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <p className="text-muted-foreground leading-relaxed">{review.comment}</p>
-                    <div className="flex items-center gap-2">
+                    <ReviewComment>{review.comment}</ReviewComment>
+                    <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="outline">{review.date}</Badge>
                       {review.flagged && (
                         <Badge variant="destructive">Marcada por moderación</Badge>
