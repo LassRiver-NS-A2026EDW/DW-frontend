@@ -1,4 +1,14 @@
-import { FormEvent, useEffect, useState } from "react";
+import { Fragment, FormEvent, useEffect, useState } from "react";
+import {
+  ArcElement,
+  BarElement,
+  CategoryScale,
+  Chart as ChartJS,
+  Legend,
+  LinearScale,
+  Tooltip,
+} from "chart.js";
+import { Bar, Doughnut } from "react-chartjs-2";
 import { useApp } from "../context/AppContext";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -21,16 +31,19 @@ import {
   Plus,
   CheckCircle,
   XCircle,
-  Home,
   Pencil,
   Loader2,
+  List,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState } from "../components/EmptyState";
 import { StatusBadge } from "../components/StatusBadge";
-import { TableSkeleton } from "../components/LoadingSkeleton";
 import { ReviewComment } from "../components/reviews/ReviewComment";
 import { Book } from "../mocks/mockData";
+import { booksApi, type BookCopyResponse } from "../api/books";
+
+ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend);
 
 const blankBookForm: Omit<Book, "id"> = {
   title: "",
@@ -56,10 +69,10 @@ export function Admin() {
     reviews,
     addBook,
     updateBook,
-    deleteBook,
     uploadBookPdf,
     downloadBookPdf,
     createBookCopy,
+    deleteBookCopy,
     updateLoan,
     hideReview,
     keepReviewVisible,
@@ -75,6 +88,10 @@ export function Admin() {
   const [savingBook, setSavingBook] = useState(false);
   const [selectedPdfFile, setSelectedPdfFile] = useState<File | null>(null);
   const [pdfSourceUrl, setPdfSourceUrl] = useState("");
+  const [expandedCopiesBookId, setExpandedCopiesBookId] = useState<string | null>(null);
+  const [bookCopies, setBookCopies] = useState<Record<string, BookCopyResponse[]>>({});
+  const [copiesLoadingBookId, setCopiesLoadingBookId] = useState<string | null>(null);
+  const [retiringCopyId, setRetiringCopyId] = useState<number | null>(null);
 
   useEffect(() => {
     if (currentUser?.role !== "admin" && currentUser?.role !== "librarian") return;
@@ -110,6 +127,89 @@ export function Admin() {
 
   const activeLoans = loans.filter((l) => l.status === "active");
   const overdueLoans = loans.filter((l) => l.status === "overdue");
+  const returnedLoans = loans.filter((l) => l.status === "returned");
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        labels: {
+          color: "#cbd5e1",
+          boxWidth: 12,
+        },
+      },
+    },
+    scales: {
+      x: {
+        ticks: { color: "#94a3b8" },
+        grid: { color: "rgba(148, 163, 184, 0.12)" },
+      },
+      y: {
+        beginAtZero: true,
+        ticks: { color: "#94a3b8", precision: 0 },
+        grid: { color: "rgba(148, 163, 184, 0.12)" },
+      },
+    },
+  };
+  const doughnutOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: "bottom" as const,
+        labels: {
+          color: "#cbd5e1",
+          boxWidth: 12,
+        },
+      },
+    },
+  };
+  const loanStatusChart = {
+    labels: ["Activos", "Vencidos", "Devueltos"],
+    datasets: [
+      {
+        data: [activeLoans.length, overdueLoans.length, returnedLoans.length],
+        backgroundColor: ["#22c55e", "#f59e0b", "#38bdf8"],
+        borderColor: "rgba(15, 23, 42, 0.9)",
+        borderWidth: 2,
+      },
+    ],
+  };
+  const inventoryChart = {
+    labels: ["Disponibles", "En prestamo", "En cola"],
+    datasets: [
+      {
+        label: "Ejemplares y solicitudes",
+        data: [
+          books.reduce((total, book) => total + (book.availableCopies ?? 0), 0),
+          loans.filter((loan) => loan.status === "active" || loan.status === "overdue").length,
+          books.reduce((total, book) => total + (book.waitingReservations ?? 0), 0),
+        ],
+        backgroundColor: ["#14b8a6", "#6366f1", "#f59e0b"],
+        borderRadius: 8,
+      },
+    ],
+  };
+  const categoryRows = Object.entries(
+    books.reduce<Record<string, number>>((acc, book) => {
+      const category = book.category || "General";
+      acc[category] = (acc[category] ?? 0) + 1;
+      return acc;
+    }, {})
+  )
+    .sort((first, second) => second[1] - first[1])
+    .slice(0, 6);
+  const categoryChart = {
+    labels: categoryRows.map(([category]) => category),
+    datasets: [
+      {
+        label: "Libros",
+        data: categoryRows.map(([, count]) => count),
+        backgroundColor: "#0ea5e9",
+        borderRadius: 8,
+      },
+    ],
+  };
 
   const openAddBook = () => {
     setEditingBook(null);
@@ -165,6 +265,40 @@ export function Admin() {
       toast.error(err?.message || "No se pudo guardar el libro");
     } finally {
       setSavingBook(false);
+    }
+  };
+
+  const loadCopies = async (bookId: string) => {
+    setCopiesLoadingBookId(bookId);
+    try {
+      const copies = await booksApi.copies(bookId);
+      setBookCopies((current) => ({ ...current, [bookId]: copies }));
+    } catch (err: any) {
+      toast.error(err?.message || "No se pudieron cargar los ejemplares");
+    } finally {
+      setCopiesLoadingBookId(null);
+    }
+  };
+
+  const toggleCopies = async (book: Book) => {
+    if (expandedCopiesBookId === book.id) {
+      setExpandedCopiesBookId(null);
+      return;
+    }
+    setExpandedCopiesBookId(book.id);
+    await loadCopies(book.id);
+  };
+
+  const retireCopy = async (book: Book, copy: BookCopyResponse) => {
+    setRetiringCopyId(copy.id);
+    try {
+      await deleteBookCopy(book.id, String(copy.id));
+      toast.success("Ejemplar retirado");
+      await loadCopies(book.id);
+    } catch (err: any) {
+      toast.error(err?.message || "No se pudo retirar el ejemplar");
+    } finally {
+      setRetiringCopyId(null);
     }
   };
 
@@ -243,6 +377,33 @@ export function Admin() {
                 </CardContent>
               </Card>
             </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Estado de prestamos</CardTitle>
+                </CardHeader>
+                <CardContent className="h-72">
+                  <Doughnut data={loanStatusChart} options={doughnutOptions} />
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Inventario operativo</CardTitle>
+                </CardHeader>
+                <CardContent className="h-72">
+                  <Bar data={inventoryChart} options={chartOptions} />
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Libros por categoria</CardTitle>
+                </CardHeader>
+                <CardContent className="h-72">
+                  <Bar data={categoryChart} options={chartOptions} />
+                </CardContent>
+              </Card>
+            </div>
           </div>
         )}
 
@@ -271,61 +432,96 @@ export function Admin() {
                 </TableHeader>
                 <TableBody>
                   {books.map((book) => (
-                    <TableRow key={book.id}>
-                      <TableCell className="font-medium">{book.title}</TableCell>
-                      <TableCell>{book.author}</TableCell>
-                      <TableCell>{book.category}</TableCell>
-                      <TableCell>{book.isbn}</TableCell>
-                      <TableCell>{book.availableCopies ?? 0}/{book.totalCopies ?? 0}</TableCell>
-                      <TableCell>
-                        <StatusBadge status={(book.active ?? book.available) ? "available" : "unavailable"} />
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => openEditBook(book)}
-                            aria-label="Editar libro"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={async () => {
-                              try {
-                                await updateBook(book.id, { available: !(book.active ?? book.available) });
-                                toast.success("Estado actualizado");
-                              } catch (err: any) {
-                                toast.error(err?.message || "No se pudo actualizar el estado");
-                              }
-                            }}
-                          >
-                            {(book.active ?? book.available) ? (
-                              <XCircle className="h-4 w-4" />
-                            ) : (
-                              <CheckCircle className="h-4 w-4" />
-                            )}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={async () => {
-                              try {
-                                await createBookCopy(book.id);
-                                toast.success("Ejemplar agregado");
-                              } catch (err: any) {
-                                toast.error(err?.message || "No se pudo agregar el ejemplar");
-                              }
-                            }}
-                            aria-label="Agregar ejemplar"
-                          >
-                            <Plus className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
+                    <Fragment key={book.id}>
+                      <TableRow>
+                        <TableCell className="font-medium">{book.title}</TableCell>
+                        <TableCell>{book.author}</TableCell>
+                        <TableCell>{book.category}</TableCell>
+                        <TableCell>{book.isbn}</TableCell>
+                        <TableCell>
+                          <span className="font-medium">{book.availableCopies ?? 0}</span>
+                          <span className="text-muted-foreground">/{book.totalCopies ?? 0}</span>
+                          {(book.waitingReservations ?? 0) > 0 && (
+                            <Badge variant="secondary" className="ml-2">
+                              Cola {book.waitingReservations}
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <StatusBadge status={(book.active ?? book.available) ? "available" : "unavailable"} />
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => openEditBook(book)}
+                              aria-label="Editar libro"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={async () => {
+                                try {
+                                  await updateBook(book.id, { available: !(book.active ?? book.available) });
+                                  toast.success("Estado actualizado");
+                                } catch (err: any) {
+                                  toast.error(err?.message || "No se pudo actualizar el estado");
+                                }
+                              }}
+                              aria-label="Cambiar estado del libro"
+                            >
+                              {(book.active ?? book.available) ? (
+                                <XCircle className="h-4 w-4" />
+                              ) : (
+                                <CheckCircle className="h-4 w-4" />
+                              )}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={async () => {
+                                try {
+                                  await createBookCopy(book.id);
+                                  toast.success("Ejemplar agregado");
+                                  if (expandedCopiesBookId === book.id) {
+                                    await loadCopies(book.id);
+                                  }
+                                } catch (err: any) {
+                                  toast.error(err?.message || "No se pudo agregar el ejemplar");
+                                }
+                              }}
+                              aria-label="Agregar ejemplar"
+                            >
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => toggleCopies(book)}
+                              aria-label="Ver ejemplares"
+                            >
+                              <List className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                      {expandedCopiesBookId === book.id && (
+                        <TableRow>
+                          <TableCell colSpan={7} className="bg-muted/20 p-4">
+                            <BookCopiesPanel
+                              book={book}
+                              copies={bookCopies[book.id] ?? []}
+                              loading={copiesLoadingBookId === book.id}
+                              retiringCopyId={retiringCopyId}
+                              onRetire={retireCopy}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </Fragment>
                   ))}
                 </TableBody>
               </Table>
@@ -556,4 +752,104 @@ export function Admin() {
 
 function isPersistedReviewId(reviewId: string) {
   return /^\d+$/.test(reviewId);
+}
+
+function BookCopiesPanel({
+  book,
+  copies,
+  loading,
+  retiringCopyId,
+  onRetire,
+}: {
+  book: Book;
+  copies: BookCopyResponse[];
+  loading: boolean;
+  retiringCopyId: number | null;
+  onRetire: (book: Book, copy: BookCopyResponse) => void;
+}) {
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Cargando ejemplares...
+      </div>
+    );
+  }
+
+  if (copies.length === 0) {
+    return <p className="text-sm text-muted-foreground">No hay ejemplares registrados para este libro.</p>;
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="font-medium">Ejemplares de {book.title}</p>
+          <p className="text-xs text-muted-foreground">
+            Solo puedes retirar ejemplares disponibles, sin cola activa y conservando al menos uno.
+          </p>
+        </div>
+        {(book.waitingReservations ?? 0) > 0 && (
+          <Badge variant="secondary">Bloqueado por cola activa</Badge>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+        {copies.map((copy) => {
+          const canRetire =
+            copy.status === "AVAILABLE" &&
+            (book.waitingReservations ?? 0) === 0 &&
+            (book.totalCopies ?? 0) > 1;
+
+          return (
+            <div key={copy.id} className="rounded-lg border border-border bg-card p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{copy.copyCode}</p>
+                  <Badge variant={copy.status === "AVAILABLE" ? "secondary" : "outline"} className="mt-2">
+                    {formatCopyStatus(copy.status)}
+                  </Badge>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => onRetire(book, copy)}
+                  disabled={!canRetire || retiringCopyId === copy.id}
+                  aria-label="Retirar ejemplar"
+                >
+                  {retiringCopyId === copy.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+              {!canRetire && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {getCopyRetireBlockedReason(book, copy)}
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function formatCopyStatus(status: string) {
+  const labels: Record<string, string> = {
+    AVAILABLE: "Disponible",
+    LOANED: "Prestado",
+    RESERVED: "Reservado",
+    INACTIVE: "Retirado",
+  };
+  return labels[status] ?? status;
+}
+
+function getCopyRetireBlockedReason(book: Book, copy: BookCopyResponse) {
+  if (copy.status !== "AVAILABLE") return "Este ejemplar no esta disponible para retirar.";
+  if ((book.waitingReservations ?? 0) > 0) return "Hay usuarios esperando este libro.";
+  if ((book.totalCopies ?? 0) <= 1) return "No se puede retirar el ultimo ejemplar.";
+  return "No disponible para retiro.";
 }

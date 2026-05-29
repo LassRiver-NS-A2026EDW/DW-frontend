@@ -100,6 +100,7 @@ interface AppContextType {
   createReservation: (bookId: string, durationMinutes: number) => Promise<void>;
   cancelReservation: (reservationId: string) => Promise<void>;
   createBookCopy: (bookId: string) => Promise<void>;
+  deleteBookCopy: (bookId: string, copyId: string) => Promise<void>;
   flagReview: (reviewId: string, reason: string) => void;
   hideReview: (reviewId: string) => Promise<void>;
   keepReviewVisible: (reviewId: string) => Promise<void>;
@@ -159,14 +160,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const reservationsQuery = useReservationsQuery(authenticated);
   const adminReviewsQuery = useAdminReviewsQuery(Boolean(canManageLibrary && authenticated));
 
-  const books = booksQuery.data?.content ?? mockBooks;
+  const books = booksQuery.data?.content ?? (booksQuery.isError ? mockBooks : []);
   const favorites = favoritesQuery.data ?? [];
   const loans = loansQuery.data ?? mockLoans;
   const reservations = reservationsQuery.data ?? [];
   const bookCategories =
-    facetsQuery.data?.categories ?? Array.from(new Set(mockBooks.map((book) => book.category))).sort();
+    facetsQuery.data?.categories ?? (facetsQuery.isError ? Array.from(new Set(mockBooks.map((book) => book.category))).sort() : []);
   const bookLanguages =
-    facetsQuery.data?.languages ?? Array.from(new Set(mockBooks.map((book) => book.language))).sort();
+    facetsQuery.data?.languages ?? (facetsQuery.isError ? Array.from(new Set(mockBooks.map((book) => book.language))).sort() : []);
 
   useEffect(() => {
     const token = restoreTokenFromStorage();
@@ -201,6 +202,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setReviews((current) => replacePersistedReviews(current, adminReviewsQuery.data));
     }
   }, [adminReviewsQuery.data, canManageLibrary]);
+
+  useEffect(() => {
+    if (!selectedBook || books.length === 0) return;
+    const freshBook = books.find((book) => book.id === selectedBook.id);
+    if (freshBook && freshBook !== selectedBook) {
+      setSelectedBookState(freshBook);
+    }
+  }, [books, selectedBook]);
 
   const invalidateBooks = async () => {
     await queryClient.invalidateQueries({ queryKey: ["books"] });
@@ -349,7 +358,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       comment: review.comment.trim(),
     });
     setReviews((current) => mergeReviews(current, [reviewFromBackend(created)]));
-    await invalidateBooks();
+    await Promise.all([invalidateBooks(), refetchSelectedBook(String(review.bookId))]);
   };
 
   const deleteReview = (reviewId: string) => {
@@ -419,13 +428,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const validationError = firstError(validateLoan({ ...loan, durationMinutes }));
     if (validationError) throw new Error(validationError);
     await loansApi.create(loan.bookId, durationMinutes);
-    await Promise.all([refreshLoans(), refreshReservations(), refreshNotifications(), invalidateBooks()]);
+    await Promise.all([
+      refreshLoans(),
+      refreshReservations(),
+      refreshNotifications(),
+      invalidateBooks(),
+      refetchSelectedBook(loan.bookId),
+    ]);
   };
 
   const updateLoan = async (loanId: string, updates: Partial<Loan>) => {
     if (updates.status === "returned") {
-      await loansApi.returnLoan(loanId);
-      await Promise.all([refreshLoans(), refreshReservations(), refreshNotifications(), invalidateBooks()]);
+      const returnedLoan = await loansApi.returnLoan(loanId);
+      await Promise.all([
+        refreshLoans(),
+        refreshReservations(),
+        refreshNotifications(),
+        invalidateBooks(),
+        refetchSelectedBook(String(returnedLoan.bookId)),
+      ]);
     }
   };
 
@@ -442,16 +463,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const validationError = firstError(validateLoan({ bookId, durationMinutes }));
     if (validationError) throw new Error(validationError);
     await reservationsApi.create(bookId, durationMinutes);
-    await Promise.all([refreshReservations(), refreshNotifications(), invalidateBooks()]);
+    await Promise.all([refreshReservations(), refreshNotifications(), invalidateBooks(), refetchSelectedBook(bookId)]);
   };
 
   const cancelReservation = async (reservationId: string) => {
-    await reservationsApi.cancel(reservationId);
-    await Promise.all([refreshReservations(), refreshNotifications(), invalidateBooks()]);
+    const cancelledReservation = await reservationsApi.cancel(reservationId);
+    await Promise.all([
+      refreshReservations(),
+      refreshNotifications(),
+      invalidateBooks(),
+      refetchSelectedBook(String(cancelledReservation.bookId)),
+    ]);
   };
 
   const createBookCopy = async (bookId: string) => {
     await booksApi.createCopy(bookId);
+    await Promise.all([invalidateBooks(), refetchSelectedBook(bookId)]);
+  };
+
+  const deleteBookCopy = async (bookId: string, copyId: string) => {
+    await booksApi.deleteCopy(bookId, copyId);
     await Promise.all([invalidateBooks(), refetchSelectedBook(bookId)]);
   };
 
@@ -464,24 +495,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const hideReview = async (reviewId: string) => {
     const hidden = await reviewsApi.hide(reviewId);
     setReviews((current) => mergeReviews(current, [reviewFromBackend(hidden)]));
-    await refreshAdminReviews();
+    await Promise.all([refreshAdminReviews(), invalidateBooks(), refetchSelectedBook(String(hidden.bookId))]);
   };
 
   const keepReviewVisible = async (reviewId: string) => {
     const visible = await reviewsApi.show(reviewId);
     setReviews((current) => mergeReviews(current, [{ ...reviewFromBackend(visible), flagged: false }]));
-    await refreshAdminReviews();
+    await Promise.all([refreshAdminReviews(), invalidateBooks(), refetchSelectedBook(String(visible.bookId))]);
   };
 
   const unflagReview = keepReviewVisible;
 
   const refetchSelectedBook = async (bookId: string) => {
-    if (selectedBook?.id !== bookId) return;
     const fresh = await queryClient.fetchQuery({
       queryKey: queryKeys.book(bookId),
       queryFn: async () => bookFromBackend(await booksApi.get(bookId)),
     });
-    setSelectedBookState(fresh);
+    setSelectedBookState((current) => (current?.id === bookId ? fresh : current));
   };
 
   const setSelectedBook = (book: Book | null) => {
@@ -542,8 +572,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         booksLoading: booksQuery.isLoading || booksQuery.isFetching,
         bookPage,
         bookPageSize,
-        bookTotalElements: booksQuery.data?.totalElements ?? mockBooks.length,
-        bookTotalPages: Math.max(1, booksQuery.data?.totalPages ?? Math.ceil(mockBooks.length / bookPageSize)),
+        bookTotalElements: booksQuery.data?.totalElements ?? (booksQuery.isError ? mockBooks.length : 0),
+        bookTotalPages: Math.max(
+          1,
+          booksQuery.data?.totalPages ?? (booksQuery.isError ? Math.ceil(mockBooks.length / bookPageSize) : 1)
+        ),
         searchQuery,
         categoryFilter,
         languageFilter,
@@ -588,6 +621,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         createReservation,
         cancelReservation,
         createBookCopy,
+        deleteBookCopy,
         flagReview,
         hideReview,
         keepReviewVisible,

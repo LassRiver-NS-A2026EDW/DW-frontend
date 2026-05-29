@@ -17,6 +17,7 @@ export interface Book {
   hasPdf?: boolean;
   pdfUrl?: string | null;
   isReservedByMe?: boolean;
+  loanCooldownUntil?: string | null;
   totalCopies?: number;
   availableCopies?: number;
   waitingReservations?: number;
@@ -88,7 +89,7 @@ export const mockBooks: Book[] = [
     coverUrl: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=300&h=450&fit=crop",
     rating: 4.8,
     available: true,
-    reviewCount: 156,
+    reviewCount: 2,
   },
   {
     id: "2",
@@ -104,7 +105,7 @@ export const mockBooks: Book[] = [
     coverUrl: "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=300&h=450&fit=crop",
     rating: 4.6,
     available: true,
-    reviewCount: 98,
+    reviewCount: 1,
   },
   {
     id: "3",
@@ -120,7 +121,7 @@ export const mockBooks: Book[] = [
     coverUrl: "https://images.unsplash.com/photo-1512820790803-83ca734da794?w=300&h=450&fit=crop",
     rating: 4.9,
     available: false,
-    reviewCount: 234,
+    reviewCount: 1,
   },
   {
     id: "4",
@@ -136,7 +137,7 @@ export const mockBooks: Book[] = [
     coverUrl: "https://images.unsplash.com/photo-1541963463532-d68292c34b19?w=300&h=450&fit=crop",
     rating: 4.7,
     available: true,
-    reviewCount: 189,
+    reviewCount: 1,
   },
   {
     id: "5",
@@ -152,7 +153,7 @@ export const mockBooks: Book[] = [
     coverUrl: "https://images.unsplash.com/photo-1495446815901-a7297e633e8d?w=300&h=450&fit=crop",
     rating: 4.5,
     available: true,
-    reviewCount: 112,
+    reviewCount: 0,
   },
   {
     id: "6",
@@ -168,7 +169,7 @@ export const mockBooks: Book[] = [
     coverUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&h=450&fit=crop",
     rating: 4.6,
     available: true,
-    reviewCount: 145,
+    reviewCount: 0,
   },
   {
     id: "7",
@@ -184,7 +185,7 @@ export const mockBooks: Book[] = [
     coverUrl: "https://images.unsplash.com/photo-1519682337058-a94d519337bc?w=300&h=450&fit=crop",
     rating: 4.8,
     available: false,
-    reviewCount: 167,
+    reviewCount: 0,
   },
   {
     id: "8",
@@ -200,7 +201,7 @@ export const mockBooks: Book[] = [
     coverUrl: "https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=300&h=450&fit=crop",
     rating: 4.7,
     available: true,
-    reviewCount: 134,
+    reviewCount: 0,
   },
   {
     id: "9",
@@ -216,7 +217,7 @@ export const mockBooks: Book[] = [
     coverUrl: "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?w=300&h=450&fit=crop",
     rating: 4.4,
     available: true,
-    reviewCount: 87,
+    reviewCount: 0,
   },
   {
     id: "10",
@@ -232,7 +233,7 @@ export const mockBooks: Book[] = [
     coverUrl: "https://images.unsplash.com/photo-1506880018603-83d5b814b5a6?w=300&h=450&fit=crop",
     rating: 4.5,
     available: true,
-    reviewCount: 121,
+    reviewCount: 0,
   },
   {
     id: "11",
@@ -248,7 +249,7 @@ export const mockBooks: Book[] = [
     coverUrl: "https://images.unsplash.com/photo-1532012197267-da84d127e765?w=300&h=450&fit=crop",
     rating: 4.6,
     available: true,
-    reviewCount: 143,
+    reviewCount: 0,
   },
   {
     id: "12",
@@ -264,7 +265,7 @@ export const mockBooks: Book[] = [
     coverUrl: "https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?w=300&h=450&fit=crop",
     rating: 4.5,
     available: false,
-    reviewCount: 156,
+    reviewCount: 0,
   },
 ];
 

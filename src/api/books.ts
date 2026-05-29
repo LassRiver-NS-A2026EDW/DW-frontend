@@ -18,6 +18,7 @@ export interface BookResponse {
   hasPdf: boolean | null;
   pdfUrl: string | null;
   reservedByMe: boolean | null;
+  loanCooldownUntil: string | null;
   totalCopies: number | null;
   availableCopies: number | null;
   waitingReservations: number | null;
@@ -89,11 +90,11 @@ export interface ListBooksParams extends Record<string, string | number | boolea
 
 export const booksApi = {
   list(params: ListBooksParams = {}): Promise<Page<BookResponse>> {
-    return http<Page<BookResponse>>("/books", { method: "GET", query: params, auth: false });
+    return http<Page<BookResponse>>("/books", { method: "GET", query: params });
   },
 
   get(id: string | number): Promise<BookResponse> {
-    return http<BookResponse>(`/books/${id}`, { method: "GET", auth: false });
+    return http<BookResponse>(`/books/${id}`, { method: "GET" });
   },
 
   facets(): Promise<BookFacetsResponse> {
@@ -122,6 +123,10 @@ export const booksApi = {
 
   createCopy(id: string | number): Promise<BookCopyResponse> {
     return http<BookCopyResponse>(`/books/${id}/copies`, { method: "POST" });
+  },
+
+  deleteCopy(id: string | number, copyId: string | number): Promise<BookCopyResponse> {
+    return http<BookCopyResponse>(`/books/${id}/copies/${copyId}`, { method: "DELETE" });
   },
 
   uploadPdf(id: string | number, file: File): Promise<BookPdfResponse> {

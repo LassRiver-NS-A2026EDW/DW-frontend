@@ -44,6 +44,7 @@ export function bookFromBackend(b: BookResponse): Book {
     hasPdf: Boolean(b.hasPdf),
     pdfUrl: b.pdfUrl,
     isReservedByMe: Boolean(b.reservedByMe),
+    loanCooldownUntil: b.loanCooldownUntil,
     totalCopies: b.totalCopies ?? 0,
     availableCopies: b.availableCopies ?? (active ? 1 : 0),
     waitingReservations: b.waitingReservations ?? 0,
