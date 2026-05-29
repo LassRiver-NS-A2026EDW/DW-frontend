@@ -25,7 +25,7 @@ import {
 } from "../components/PasswordStrength";
 import { Gender } from "../api/auth";
 import logo from "../assets/logo.png";
-import { firstError, validateRegister, yesterdayLocalIso } from "../utils/validation";
+import { firstError, maxBirthDateForMinimumAge, validateRegister } from "../utils/validation";
 
 const GENDERS: { value: Gender; label: string }[] = [
   { value: "F", label: "Femenino" },
@@ -50,7 +50,7 @@ export function Register() {
   const passwordsMismatch = confirmPassword.length > 0 && password !== confirmPassword;
   const strong = useMemo(() => isPasswordStrong(password), [password]);
 
-  const maxBirthDate = yesterdayLocalIso();
+  const maxBirthDate = maxBirthDateForMinimumAge();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -4,6 +4,7 @@ import type { Book } from "../mocks/mockData";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const HTTP_URL_RE = /^https?:\/\/\S+$/i;
 const GENDERS: Gender[] = ["F", "M", "OTHER", "NR"];
+export const MINIMUM_REGISTER_AGE_YEARS = 13;
 
 export function localDateIso(date = new Date()): string {
   const year = date.getFullYear();
@@ -12,9 +13,9 @@ export function localDateIso(date = new Date()): string {
   return `${year}-${month}-${day}`;
 }
 
-export function yesterdayLocalIso(): string {
+export function maxBirthDateForMinimumAge(minimumAge = MINIMUM_REGISTER_AGE_YEARS): string {
   const date = new Date();
-  date.setDate(date.getDate() - 1);
+  date.setFullYear(date.getFullYear() - minimumAge);
   return localDateIso(date);
 }
 
@@ -28,6 +29,10 @@ function isEmail(value: string): boolean {
 
 function isPastLocalDate(value: string): boolean {
   return Boolean(value) && value < localDateIso();
+}
+
+function isAtLeastMinimumAge(value: string): boolean {
+  return Boolean(value) && value <= maxBirthDateForMinimumAge();
 }
 
 function isPositiveInteger(value: unknown): boolean {
@@ -69,6 +74,11 @@ export function validateRegister(input: {
   pushIf(errors, !GENDERS.includes(input.gender), "Selecciona un genero valido");
   pushIf(errors, !input.birthDate, "La fecha de nacimiento es obligatoria");
   pushIf(errors, Boolean(input.birthDate) && !isPastLocalDate(input.birthDate), "La fecha de nacimiento debe ser anterior a hoy");
+  pushIf(
+    errors,
+    Boolean(input.birthDate) && isPastLocalDate(input.birthDate) && !isAtLeastMinimumAge(input.birthDate),
+    `La fecha de nacimiento debe indicar una edad minima de ${MINIMUM_REGISTER_AGE_YEARS} anos`
+  );
 
   return errors;
 }
