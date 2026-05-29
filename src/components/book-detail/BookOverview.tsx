@@ -8,9 +8,12 @@ import type { Book } from "../../mocks/mockData";
 
 interface BookOverviewProps {
   book: Book;
+  reviewCount?: number;
 }
 
-export function BookOverview({ book }: BookOverviewProps) {
+export function BookOverview({ book, reviewCount }: BookOverviewProps) {
+  const visibleReviewCount = reviewCount ?? book.reviewCount;
+
   return (
     <div>
       <h1 className="text-3xl font-bold text-foreground mb-2">{book.title}</h1>
@@ -18,7 +21,9 @@ export function BookOverview({ book }: BookOverviewProps) {
 
       <div className="flex items-center gap-4 mb-6">
         <RatingStars rating={book.rating} readonly size="lg" showLabel />
-        <span className="text-sm text-muted-foreground">({book.reviewCount} resenas)</span>
+        <span className="text-sm text-muted-foreground">
+          ({visibleReviewCount} {visibleReviewCount === 1 ? "resena" : "resenas"})
+        </span>
         <StatusBadge status={book.available ? "available" : "unavailable"} />
       </div>
 

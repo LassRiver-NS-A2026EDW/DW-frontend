@@ -243,7 +243,7 @@ export function BookDetail() {
           </div>
 
           <div className="lg:col-span-2 space-y-6">
-            <BookOverview book={selectedBook} />
+            <BookOverview book={selectedBook} reviewCount={bookReviews.length} />
             <ReviewSection
               reviews={bookReviews}
               currentUser={currentUser}
