@@ -1,8 +1,18 @@
 # BookWorm Frontend
 
+![React](https://img.shields.io/badge/React-18.3.1-61DAFB?logo=react&logoColor=black)
+![Vite](https://img.shields.io/badge/Vite-6.3.5-646CFF?logo=vite&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-Ready-3178C6?logo=typescript&logoColor=white)
+![TanStack Query](https://img.shields.io/badge/TanStack%20Query-5.x-FF4154?logo=reactquery&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-4.x-06B6D4?logo=tailwindcss&logoColor=white)
+![Chart.js](https://img.shields.io/badge/Chart.js-4.x-FF6384?logo=chartdotjs&logoColor=white)
+![Documentation](https://img.shields.io/badge/docs-ES%20%2F%20EN-8A2BE2)
+
 BookWorm Frontend is the React client for a digital library platform. It provides the user interface for authentication, book discovery, favorites, loans, reservations, reviews, notifications, administration, in-app PDF reading, and an AI reading assistant.
 
 The application is built with React, Vite, TypeScript, TanStack Query, Tailwind CSS, Radix UI primitives, Chart.js, and a custom fetch-based API layer.
+
+The visual badges above are generated remotely by Shields.io, so this README stays polished without requiring screenshots or checked-in image assets.
 
 ## Table Of Contents
 
@@ -319,4 +329,3 @@ Before opening a pull request:
 - Verify catalog filters after changing book or query logic.
 - Verify loan, reservation, notification, and favorite query invalidations.
 - Keep new shared UI behavior in reusable components when it appears in more than one screen.
-
