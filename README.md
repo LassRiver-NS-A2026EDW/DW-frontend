@@ -1,322 +1,322 @@
-# LassRiver NS - Biblioteca Digital Premium
+# BookWorm Frontend
 
-![LassRiver NS Logo](src/imports/imagen.png)
+BookWorm Frontend is the React client for a digital library platform. It provides the user interface for authentication, book discovery, favorites, loans, reservations, reviews, notifications, administration, in-app PDF reading, and an AI reading assistant.
 
-## 📚 Descripción
+The application is built with React, Vite, TypeScript, TanStack Query, Tailwind CSS, Radix UI primitives, Chart.js, and a custom fetch-based API layer.
 
-LassRiver NS es una plataforma premium de biblioteca digital diseñada para gestionar libros, préstamos, reseñas y usuarios con diferentes niveles de acceso. La aplicación combina una experiencia visual moderna inspirada en el flujo del conocimiento como un río digital, con funcionalidad robusta y accesible.
+## Table Of Contents
 
-## ✨ Características Principales
+- [Product Scope](#product-scope)
+- [Architecture Overview](#architecture-overview)
+- [Core Features](#core-features)
+- [Technology Stack](#technology-stack)
+- [Project Structure](#project-structure)
+- [Runtime Configuration](#runtime-configuration)
+- [Local Development](#local-development)
+- [Application State](#application-state)
+- [API Integration](#api-integration)
+- [Main Screens](#main-screens)
+- [Documentation](#documentation)
+- [Quality Checklist](#quality-checklist)
 
-### Para Usuarios
-- 📖 **Catálogo Completo**: Exploración de libros con filtros avanzados por categoría, idioma, rating y disponibilidad
-- ⭐ **Sistema de Reseñas**: Calificación y comentarios de 1-5 estrellas con validación de 500 caracteres
-- ❤️ **Favoritos**: Gestión de libros favoritos con sincronización en tiempo real
-- 👤 **Perfil Personalizado**: Edición de información personal y visualización de actividad
+## Product Scope
 
-### Para Bibliotecarios
-- 📊 **Gestión de Préstamos**: Control de préstamos activos, vencidos y devueltos
-- 🔍 **Moderación de Reseñas**: Sistema de flagging y moderación de contenido
-- 📈 **Estadísticas**: Métricas de uso y actividad de la biblioteca
+BookWorm is designed as a transactional library application, not just a static catalog. The frontend coordinates workflows that affect several backend resources at once:
 
-### Para Administradores
-- 📚 **Gestión de Libros**: CRUD completo de libros con validaciones
-- 👥 **Control de Usuarios**: Administración de roles y permisos
-- 🎯 **Dashboard Completo**: Métricas en tiempo real de toda la plataforma
-- 📋 **Historial de Operaciones**: Auditoría de cambios y acciones
+- Borrowing a book updates copy availability, loans, notifications, and the selected book view.
+- Returning a book can fulfill the next reservation in the queue.
+- Reserving a book updates queue state and user notifications.
+- Moderating a review changes visible ratings and review counts.
+- Managing copies changes catalog availability.
 
-## 🎨 Design System
+The frontend keeps those workflows understandable by centralizing cross-screen actions in `AppContext` and delegating server-state caching to TanStack Query.
 
-La identidad visual de LassRiver NS se basa en tres pilares:
+## Architecture Overview
 
-- **Azul Profundo (#182858, #183868)**: Confianza, conocimiento
-- **Cyan Tecnológico (#1898A8, #1888A8)**: Innovación, fluidez
-- **Verde Natural (#68B848, #78B848)**: Crecimiento, aprendizaje
-
-Ver documentación completa en [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md)
-
-## 🚀 Stack Tecnológico
-
-- **Framework**: React 18.3.1 + TypeScript
-- **Styling**: Tailwind CSS 4.0
-- **UI Components**: Radix UI Primitives
-- **Icons**: Lucide React
-- **State Management**: React Context API
-- **Notifications**: Sonner
-- **Forms**: React Hook Form (ready to integrate)
-
-## 📁 Estructura del Proyecto
-
+```mermaid
+flowchart LR
+  User[User] --> UI[React UI]
+  UI --> Context[AppContext]
+  UI --> Query[TanStack Query]
+  Context --> API[API Modules]
+  Query --> API
+  API --> HTTP[fetch wrapper]
+  HTTP --> Backend[Spring Boot API]
+  Backend --> DB[(PostgreSQL)]
 ```
+
+The frontend has three main state layers:
+
+| Layer | Responsibility | Examples |
+|---|---|---|
+| Local component state | Temporary UI state | Form inputs, dialogs, selected PDF page, chat input |
+| `AppContext` | Shared client state and workflows | Current user, selected book, current view, filters, actions |
+| TanStack Query | Remote server state | Books, loans, reservations, favorites, notifications, reviews |
+
+## Core Features
+
+### Reader Users
+
+- Register and sign in with JWT-backed authentication.
+- Browse the catalog with search, category, language, availability, and pagination controls.
+- Mark books as favorites.
+- Borrow available books with a duration between 5 minutes and 7 days.
+- Join a reservation queue when no copies are available.
+- View current, overdue, and returned loans.
+- Renew eligible loans.
+- Filter loans by date.
+- Read borrowed PDFs inside the app.
+- Ask the AI assistant questions about a book or selected text.
+- Write reviews for books previously borrowed.
+- View persistent notifications.
+
+### Librarians And Administrators
+
+- Access the administration panel.
+- View operational dashboard charts.
+- Create, edit, activate, inactivate, and delete books.
+- Upload PDF files or attach PDFs from allowed remote URLs.
+- Add and retire book copies.
+- Review active and overdue loans.
+- Mark loans as returned.
+- Moderate reviews by hiding or showing them.
+
+## Technology Stack
+
+| Area | Technology |
+|---|---|
+| Framework | React 18 |
+| Build tool | Vite |
+| Language | TypeScript |
+| Server-state cache | TanStack Query |
+| Styling | Tailwind CSS |
+| UI primitives | Radix UI |
+| Icons | Lucide React |
+| Charts | Chart.js and React Chart.js 2 |
+| Toasts | Sonner |
+| Markdown rendering | React Markdown and remark-gfm |
+| API transport | Browser `fetch` through a local wrapper |
+
+## Project Structure
+
+```text
 src/
-├── app/
-│   ├── components/
-│   │   ├── layout/          # Sidebar, Topbar
-│   │   ├── shared/          # EmptyState, LoadingSkeleton, RatingStars, Badges
-│   │   ├── ui/              # Componentes base (Radix UI)
-│   │   └── views/           # Páginas principales
-│   ├── context/             # AppContext para state management
-│   ├── data/                # mockData.ts (a reemplazar con API)
-│   └── lib/                 # Utilidades
-├── imports/                 # Assets importados (logos, etc)
-└── styles/                  # theme.css, fonts.css
+  api/
+    auth.ts
+    books.ts
+    chat.ts
+    favorites.ts
+    http.ts
+    loans.ts
+    mappers.ts
+    notifications.ts
+    reservations.ts
+    reviews.ts
+    users.ts
+  components/
+    book-detail/
+    catalog/
+    chat/
+    loans/
+    notifications/
+    reviews/
+    ui/
+  context/
+    AppContext.tsx
+  hooks/
+    queryKeys.ts
+    use-mobile.ts
+    useLibraryQueries.ts
+  layouts/
+    Sidebar.tsx
+    Topbar.tsx
+  lib/
+    queryClient.ts
+  pages/
+    AdminPage.tsx
+    BookDetailPage.tsx
+    BookReaderPage.tsx
+    CatalogPage.tsx
+    FavoritesPage.tsx
+    HomePage.tsx
+    LoansPage.tsx
+    LoginPage.tsx
+    ProfilePage.tsx
+    RegisterPage.tsx
+    ReservationsPage.tsx
+    ReviewsPage.tsx
+  utils/
+    display.ts
+    validation.ts
 ```
 
-## 🔐 Roles y Permisos
+## Runtime Configuration
 
-### Usuario (user)
-- Ver catálogo público
-- Gestionar favoritos
-- Escribir y editar reseñas propias
-- Ver y editar perfil
+The frontend reads the backend base URL from:
 
-### Bibliotecario (librarian)
-- Todo lo anterior
-- Gestionar préstamos
-- Moderar reseñas
-- Ver dashboard de métricas
+```text
+VITE_API_BASE_URL
+```
 
-### Administrador (admin)
-- Todo lo anterior
-- Crear/editar/eliminar libros
-- Gestionar usuarios (futuro)
-- Acceso completo al sistema
+If the variable is not defined, the application uses:
 
-## 🛣️ Rutas de la Aplicación
+```text
+/api
+```
 
-### Públicas
-- `/` - Home/Landing page
-- `/login` - Inicio de sesión
-- `/register` - Registro de usuarios
-- `/catalog` - Catálogo de libros
+Recommended local `.env`:
 
-### Protegidas (Autenticación requerida)
-- `/favorites` - Libros favoritos del usuario
-- `/reviews` - Reseñas del usuario
-- `/profile` - Perfil y configuración
-- `/book-detail` - Detalle de libro seleccionado
+```env
+VITE_API_BASE_URL=http://localhost:8080/api
+```
 
-### Administrativas (Admin/Librarian)
-- `/admin` - Dashboard principal
-  - Tab: Dashboard - Métricas generales
-  - Tab: Books - Gestión de libros
-  - Tab: Loans - Gestión de préstamos
-  - Tab: Reviews - Moderación de reseñas
+If the frontend is served behind a reverse proxy that forwards `/api` to the backend, the variable can be omitted.
 
-## 🔧 Instalación y Desarrollo
+## Local Development
+
+Install dependencies:
 
 ```bash
-# Instalar dependencias
-pnpm install
+npm install
+```
 
-# Variables de entorno (crear .env)
-VITE_API_BASE_URL=https://api.lassriver.com
+Start the development server:
 
-# Modo desarrollo local
+```bash
 npm run dev
+```
 
-# Build para producción
+Build for production:
+
+```bash
 npm run build
 ```
 
-## 📡 Integración con Backend
+Run linting:
 
-La aplicación actualmente usa datos mock en `src/app/data/mockData.ts`. Para integrar con backend:
-
-1. Ver guía completa en [API_INTEGRATION.md](API_INTEGRATION.md)
-2. Ver endpoints documentados en [HANDOFF.md](HANDOFF.md)
-3. Implementar servicios en `src/app/services/`
-4. Opcional: Usar React Query para cache y sincronización
-
-### Endpoints Principales
-
-```
-POST   /api/auth/login
-POST   /api/auth/register
-GET    /api/books?search=&category=&language=
-GET    /api/books/:id
-POST   /api/favorites/:bookId
-GET    /api/reviews
-POST   /api/books/:bookId/reviews
+```bash
+npm run lint
 ```
 
-Ver lista completa en [HANDOFF.md](HANDOFF.md)
+The default Vite development URL is usually:
 
-## 🎯 Usuarios de Prueba
-
-```javascript
-// Usuario regular
-Email: daniel.lasso@lassriver.com
-Password: (cualquiera en modo mock)
-
-// Bibliotecaria
-Email: ana.rivera@lassriver.com
-Password: (cualquiera en modo mock)
-
-// Administrador
-Email: admin@lassriver.com
-Password: (cualquiera en modo mock)
+```text
+http://localhost:5173
 ```
 
-## 🧩 Componentes Principales
+## Application State
 
-### Shared Components
+### `AppContext`
 
-```tsx
-// Empty States
-<EmptyState
-  icon={Heart}
-  title="No tienes favoritos"
-  description="Explora el catálogo..."
-  actionLabel="Ir al Catálogo"
-  onAction={() => navigate('/catalog')}
-/>
+`src/context/AppContext.tsx` is the frontend workflow coordinator. It stores the authenticated user, current view, selected book, catalog filters, sidebar state, theme, and high-level actions.
 
-// Rating Stars (Interactive/Readonly)
-<RatingStars
-  rating={4.5}
-  onRatingChange={setRating}
-  size="md"
-  showLabel
-/>
+Important actions include:
 
-// Status Badges
-<StatusBadge status="available" />
-<StatusBadge status="overdue" />
-<RoleBadge role="admin" />
+- `login`
+- `register`
+- `logout`
+- `toggleFavorite`
+- `addLoan`
+- `updateLoan`
+- `renewLoan`
+- `createReservation`
+- `cancelReservation`
+- `addReview`
+- `hideReview`
+- `keepReviewVisible`
+- `addBook`
+- `updateBook`
+- `deleteBook`
+- `createBookCopy`
+- `deleteBookCopy`
+- `uploadBookPdf`
+- `downloadBookPdf`
 
-// Loading Skeletons
-<BookGridSkeleton count={8} />
-<BookDetailSkeleton />
-<TableSkeleton rows={5} />
+### TanStack Query
+
+`src/hooks/useLibraryQueries.ts` defines query hooks for:
+
+- Books.
+- Book facets.
+- Favorites.
+- Loans.
+- Reservations.
+- Notifications.
+- Admin reviews.
+
+`src/hooks/queryKeys.ts` centralizes query keys so invalidations are consistent.
+
+### API Mappers
+
+`src/api/mappers.ts` converts backend DTOs into frontend view models. This keeps UI components independent from backend naming and enum formats.
+
+## API Integration
+
+The custom HTTP layer is located at:
+
+```text
+src/api/http.ts
 ```
 
-## 📊 Data Models
+It handles:
 
-```typescript
-interface Book {
-  id: string;
-  title: string;
-  author: string;
-  isbn: string;
-  category: string;
-  language: string;
-  publisher: string;
-  publishDate: string;
-  pages: number;
-  description: string;
-  coverUrl: string;
-  rating: number;
-  available: boolean;
-  reviewCount: number;
-}
+- API URL construction.
+- JSON serialization.
+- JWT headers.
+- Error normalization.
+- Session cleanup on `401`.
 
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: "user" | "librarian" | "admin";
-}
+The chat API is intentionally separate because it consumes a streaming response:
 
-interface Review {
-  id: string;
-  bookId: string;
-  userId: string;
-  userName: string;
-  rating: number;
-  comment: string;
-  date: string;
-  flagged: boolean;
-  flagReason?: string;
-}
-
-interface Loan {
-  id: string;
-  bookId: string;
-  bookTitle: string;
-  userId: string;
-  userName: string;
-  loanDate: string;
-  dueDate: string;
-  returnDate?: string;
-  status: "active" | "overdue" | "returned";
-}
+```text
+src/api/chat.ts
 ```
 
-## ♿ Accesibilidad
+## Main Screens
 
-- ✅ Contraste WCAG AA en todos los textos
-- ✅ Focus states visibles (ring de 3px)
-- ✅ Labels en todos los inputs
-- ✅ Alt text en imágenes
-- ✅ Navegación por teclado
-- ✅ Screen reader friendly
+| Screen | Component | Responsibility |
+|---|---|---|
+| Home | `HomePage` | Overview, quick navigation, featured books |
+| Catalog | `CatalogPage` | Search, filters, pagination, book cards |
+| Book detail | `BookDetailPage` | Borrow, reserve, review, favorite, open reader |
+| Reader | `BookReaderPage` | PDF rendering, page navigation, AI chat |
+| Favorites | `FavoritesPage` | User favorite books |
+| Loans | `LoansPage` | Loan list, date filters, returns, renewals |
+| Reservations | `ReservationsPage` | Reservation queue status and cancellation |
+| Reviews | `ReviewsPage` | User reviews |
+| Profile | `ProfilePage` | Profile editing and password change |
+| Admin | `AdminPage` | Dashboard, books, copies, loans, review moderation |
 
-## 🎨 Patrones Visuales
+## Documentation
 
-### Patrón de Ondas
-Inspirado en el logo LassRiver NS, usado en:
-- Fondos de Login/Register (opacidad 5%)
-- Hero section en Home (opacidad 10%)
+The project includes bilingual technical documentation:
 
-### Glassmorphism Sutil
-Aplicado en modales y elementos destacados para dar sensación de profundidad y modernidad.
+```text
+docs/
+  en/
+    architecture_and_flow.md
+    backend_api.md
+    frontend_architecture.md
+  es/
+    architecture_and_flow.md
+    backend_api.md
+    frontend_architecture.md
+```
 
-### Animaciones
-- Transiciones suaves (200-300ms)
-- Hover effects en cards (translateY -2px)
-- Skeleton pulse animation
-- Toast notifications slide-in
+Recommended entry points:
 
-## 📝 Próximos Pasos
+- [Architecture And Flow](docs/en/architecture_and_flow.md)
+- [Backend API Contract](docs/en/backend_api.md)
+- [Frontend Architecture](docs/en/frontend_architecture.md)
 
-### Fase 1: Backend Integration
-- [ ] Implementar servicios de API
-- [ ] Conectar autenticación JWT
-- [ ] Migrar de mockData a endpoints reales
-- [ ] Agregar error handling global
+## Quality Checklist
 
-### Fase 2: Features
-- [ ] Paginación en catálogo
-- [ ] Búsqueda avanzada
-- [ ] Exportar reportes (Admin)
-- [ ] Notificaciones push
-- [ ] Modo offline
+Before opening a pull request:
 
-### Fase 3: Optimization
-- [ ] React Query para cache
-- [ ] Lazy loading de rutas
-- [ ] Image optimization
-- [ ] Performance monitoring
+- Run `npm run lint`.
+- Run `npm run build`.
+- Verify authenticated and unauthenticated flows.
+- Verify catalog filters after changing book or query logic.
+- Verify loan, reservation, notification, and favorite query invalidations.
+- Keep new shared UI behavior in reusable components when it appears in more than one screen.
 
-### Fase 4: Testing
-- [ ] Unit tests (Vitest)
-- [ ] Integration tests
-- [ ] E2E tests (Playwright)
-- [ ] Accessibility tests
-
-## 📚 Documentación
-
-- [HANDOFF.md](HANDOFF.md) - Guía completa de handoff a desarrollo
-- [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) - Sistema de diseño completo
-- [API_INTEGRATION.md](API_INTEGRATION.md) - Guía de integración con backend
-
-## 🤝 Contribución
-
-Este proyecto está preparado para handoff a desarrollo frontend. Para contribuir:
-
-1. Leer documentación de handoff
-2. Seguir convenciones del design system
-3. Mantener consistencia visual
-4. Agregar tests para nuevas features
-5. Documentar cambios importantes
-
-## 📄 Licencia
-
-Proyecto propietario de LassRiver NS.
-
----
-
-**Desarrollado con ❤️ para LassRiver NS**
-
-*Biblioteca Digital Premium - Donde el conocimiento fluye como un río*
