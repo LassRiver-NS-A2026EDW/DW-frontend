@@ -1,10 +1,13 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Bot, Send, X, User } from "lucide-react";
+import { Bot, KeyRound, Send, Settings, Trash2, X, User } from "lucide-react";
 import { Button } from "../ui/button";
+import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import { chatStream, ChatMessage } from "../../api/chat";
+
+const DEEPSEEK_KEY_STORAGE = "bookworm.ai.deepseekKey";
 
 interface ChatPanelProps {
   bookId: string;
@@ -19,6 +22,9 @@ export function ChatPanel({ bookId, bookDescription, selectedText, onClearSelect
   const [question, setQuestion] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [personalApiKey, setPersonalApiKey] = useState(() => localStorage.getItem(DEEPSEEK_KEY_STORAGE) ?? "");
+  const [apiKeyInput, setApiKeyInput] = useState(() => localStorage.getItem(DEEPSEEK_KEY_STORAGE) ?? "");
   const abortRef = useRef<AbortController | null>(null);
   const messagesRef = useRef<HTMLDivElement | null>(null);
 
@@ -39,6 +45,22 @@ export function ChatPanel({ bookId, bookDescription, selectedText, onClearSelect
     setQuestion("");
     setIsLoading(false);
     setError(null);
+  };
+
+  const savePersonalApiKey = () => {
+    const cleanKey = apiKeyInput.trim();
+    setPersonalApiKey(cleanKey);
+    if (cleanKey) {
+      localStorage.setItem(DEEPSEEK_KEY_STORAGE, cleanKey);
+    } else {
+      localStorage.removeItem(DEEPSEEK_KEY_STORAGE);
+    }
+  };
+
+  const clearPersonalApiKey = () => {
+    setPersonalApiKey("");
+    setApiKeyInput("");
+    localStorage.removeItem(DEEPSEEK_KEY_STORAGE);
   };
 
   const handleSubmit = async (event?: FormEvent) => {
@@ -68,6 +90,7 @@ export function ChatPanel({ bookId, bookDescription, selectedText, onClearSelect
         selectedText,
         context: bookDescription,
         question: cleanQuestion,
+        providerApiKey: personalApiKey || undefined,
         history,
       },
       {
@@ -103,10 +126,59 @@ export function ChatPanel({ bookId, bookDescription, selectedText, onClearSelect
           <Bot className="h-4 w-4 text-primary" />
           Asistente IA
         </div>
-        <Button variant="ghost" size="icon" onClick={onClose ?? clearChat} aria-label="Cerrar chat">
-          <X className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setSettingsOpen((current) => !current)}
+            aria-label="Configurar clave de IA"
+          >
+            <Settings className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={onClose ?? clearChat} aria-label="Cerrar chat">
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
+
+      {settingsOpen && (
+        <div className="shrink-0 border-b border-border bg-background/60 p-4">
+          <div className="mb-3 flex items-start gap-2">
+            <KeyRound className="mt-0.5 h-4 w-4 text-primary" />
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-foreground">Clave personal de DeepSeek</p>
+              <p className="text-xs text-muted-foreground">
+                Se guarda solo en este navegador y se usa como respaldo si la clave del sistema falla.
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Input
+              type="password"
+              value={apiKeyInput}
+              onChange={(event) => setApiKeyInput(event.target.value.slice(0, 300))}
+              placeholder="sk-..."
+              autoComplete="off"
+            />
+            <Button type="button" onClick={savePersonalApiKey} disabled={apiKeyInput.trim() === personalApiKey}>
+              Guardar
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={clearPersonalApiKey}
+              disabled={!personalApiKey && !apiKeyInput}
+              aria-label="Eliminar clave personal"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+          {personalApiKey && (
+            <p className="mt-2 text-xs text-muted-foreground">Clave activa: {maskApiKey(personalApiKey)}</p>
+          )}
+        </div>
+      )}
 
       <div ref={messagesRef} className="flex-1 min-h-0 overflow-auto custom-scroll p-4 space-y-4">
         {messages.length === 0 && (
@@ -146,7 +218,20 @@ export function ChatPanel({ bookId, bookDescription, selectedText, onClearSelect
         </div>
       )}
 
-      {error && <p className="mx-4 mb-3 text-xs text-destructive">{error}</p>}
+      {error && (
+        <div className="mx-4 mb-3 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+          <p>{error}</p>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="mt-2 h-7 px-2 text-xs"
+            onClick={() => setSettingsOpen(true)}
+          >
+            Configurar clave personal
+          </Button>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="shrink-0 p-3 border-t border-border flex gap-2">
         <Textarea
@@ -168,6 +253,11 @@ export function ChatPanel({ bookId, bookDescription, selectedText, onClearSelect
       </form>
     </aside>
   );
+}
+
+function maskApiKey(apiKey: string) {
+  if (apiKey.length <= 8) return "••••";
+  return `${apiKey.slice(0, 3)}...${apiKey.slice(-4)}`;
 }
 
 function MessageAvatar({ icon }: { icon: "bot" | "user" }) {

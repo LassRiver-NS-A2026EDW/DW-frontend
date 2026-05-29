@@ -10,6 +10,7 @@ export interface ChatRequest {
   selectedText?: string;
   context?: string;
   question: string;
+  providerApiKey?: string;
   history?: ChatMessage[];
 }
 
