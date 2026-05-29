@@ -63,7 +63,7 @@ export function BookDetail() {
 
   const handleSubmitReview = async () => {
     if (!currentUser) {
-      requireAuth("escribir una resena");
+      requireAuth("escribir una reseña");
       return;
     }
     if (!comment.trim()) {
@@ -98,16 +98,16 @@ export function BookDetail() {
       });
       setComment("");
       setRating(5);
-      toast.success("Resena publicada correctamente");
+      toast.success("Reseña publicada correctamente");
     } catch (err: any) {
-      toast.error(err?.message || "No se pudo publicar la resena");
+      toast.error(err?.message || "No se pudo publicar la reseña");
     }
   };
 
   const confirmDeleteReview = () => {
     if (userReview) {
       deleteReview(userReview.id);
-      toast.success("Resena eliminada correctamente");
+      toast.success("Reseña eliminada correctamente");
     }
     setConfirmDeleteOpen(false);
   };
@@ -201,7 +201,7 @@ export function BookDetail() {
     }
 
     if (!activeLoan && !selectedBook.isReservedByMe && currentUser.role !== "admin" && currentUser.role !== "librarian") {
-      toast.error("Necesitas un prestamo activo para leer este libro");
+      toast.error("Necesitas un préstamo activo para leer este libro");
       return;
     }
 
@@ -263,8 +263,8 @@ export function BookDetail() {
       <ConfirmDialog
         open={confirmDeleteOpen}
         onOpenChange={setConfirmDeleteOpen}
-        title="Eliminar resena?"
-        description="Esta accion no se puede deshacer. Tu resena sera eliminada permanentemente."
+        title="¿Eliminar reseña?"
+        description="Esta acción no se puede deshacer. Tu reseña será eliminada permanentemente."
         confirmLabel="Eliminar"
         destructive
         onConfirm={confirmDeleteReview}
@@ -279,7 +279,7 @@ function BackToCatalogButton({ onBack }: { onBack: () => void }) {
   return (
     <Button variant="ghost" onClick={onBack}>
       <ArrowLeft className="h-4 w-4 mr-2" />
-      Volver al catalogo
+      Volver al catálogo
     </Button>
   );
 }

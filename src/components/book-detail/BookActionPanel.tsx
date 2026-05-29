@@ -67,7 +67,7 @@ export function BookActionPanel({
         {book.hasPdf ? (
           <Button className="w-full" variant="secondary" onClick={onReadPdf} disabled={!canReadPdf}>
             <FileText className="h-4 w-4 mr-2" />
-            {canReadPdf ? "Leer PDF" : "Requiere prestamo activo"}
+            {canReadPdf ? "Leer PDF" : "Requiere préstamo activo"}
           </Button>
         ) : (
           <Button className="w-full" variant="outline" disabled>
@@ -192,9 +192,9 @@ function LoanActionButton({
 function CooldownNotice({ cooldownUntil }: { cooldownUntil: Date }) {
   return (
     <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
-      <p className="font-medium">Cooldown de prestamo activo</p>
+      <p className="font-medium">Cooldown de préstamo activo</p>
       <p className="mt-1 text-amber-100/80">
-        Podras reservar este libro otra vez en {formatCooldownRemaining(cooldownUntil)}.
+        Podrás reservar este libro otra vez en {formatCooldownRemaining(cooldownUntil)}.
       </p>
     </div>
   );
@@ -216,7 +216,7 @@ function formatCooldownRemaining(cooldownUntil: Date) {
   const minutes = totalMinutes % 60;
 
   if (hours >= 24) {
-    return "1 dia";
+    return "1 día";
   }
   if (hours > 0 && minutes > 0) {
     return `${hours} h ${minutes} min`;

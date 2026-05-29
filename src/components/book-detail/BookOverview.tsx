@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { RatingStars } from "../RatingStars";
 import { StatusBadge } from "../StatusBadge";
 import type { Book } from "../../mocks/mockData";
+import { formatLanguage } from "../../utils/display";
 
 interface BookOverviewProps {
   book: Book;
@@ -22,14 +23,14 @@ export function BookOverview({ book, reviewCount }: BookOverviewProps) {
       <div className="flex items-center gap-4 mb-6">
         <RatingStars rating={book.rating} readonly size="lg" showLabel />
         <span className="text-sm text-muted-foreground">
-          ({visibleReviewCount} {visibleReviewCount === 1 ? "resena" : "resenas"})
+          ({visibleReviewCount} {visibleReviewCount === 1 ? "reseña" : "reseñas"})
         </span>
         <StatusBadge status={book.available ? "available" : "unavailable"} />
       </div>
 
       <div className="flex flex-wrap gap-2 mb-6">
         <Badge variant="default">{book.category}</Badge>
-        <Badge variant="secondary">{book.language}</Badge>
+        <Badge variant="secondary">{formatLanguage(book.language)}</Badge>
       </div>
 
       <Card>
@@ -38,15 +39,15 @@ export function BookOverview({ book, reviewCount }: BookOverviewProps) {
         </CardHeader>
         <CardContent className="space-y-3">
           <DetailRow icon={Building2} label="Editorial" value={book.publisher} />
-          <DetailRow icon={Calendar} label="Fecha de Publicacion" value={formatPublishDate(book.publishDate)} />
-          <DetailRow icon={BookOpen} label="Paginas" value={String(book.pages)} />
+          <DetailRow icon={Calendar} label="Fecha de publicación" value={formatPublishDate(book.publishDate)} />
+          <DetailRow icon={BookOpen} label="Páginas" value={String(book.pages)} />
           <DetailRow icon={Globe} label="ISBN" value={book.isbn} />
         </CardContent>
       </Card>
 
       <Card className="mt-6">
         <CardHeader>
-          <CardTitle>Descripcion</CardTitle>
+          <CardTitle>Descripción</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-muted-foreground leading-relaxed">{book.description}</p>

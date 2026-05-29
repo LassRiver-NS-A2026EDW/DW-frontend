@@ -3,6 +3,7 @@ import { Badge } from "../ui/badge";
 import { Card, CardContent } from "../ui/card";
 import { RatingStars } from "../RatingStars";
 import type { Book } from "../../mocks/mockData";
+import { formatLanguage } from "../../utils/display";
 
 interface BookCardProps {
   book: Book;
@@ -52,7 +53,7 @@ export function BookCard({ book, isFavorite, onOpen, onToggleFavorite }: BookCar
         <div className="mt-auto space-y-2">
           <div className="flex flex-wrap gap-2">
             <Badge variant="secondary">{book.category}</Badge>
-            <Badge variant="outline">{book.language}</Badge>
+            <Badge variant="outline">{formatLanguage(book.language)}</Badge>
           </div>
           <AvailabilityPill available={book.available} />
         </div>

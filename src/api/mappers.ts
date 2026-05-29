@@ -29,11 +29,11 @@ export function bookFromBackend(b: BookResponse): Book {
     author: b.author,
     isbn: b.isbn,
     category: b.category ?? "General",
-    language: b.language ?? "Espanol",
+    language: b.language ?? "Español",
     publisher: b.publisher ?? "Sin editorial",
     publishDate: b.publishDate ?? b.createdAt?.slice(0, 10) ?? "",
     pages: b.pages ?? 0,
-    description: b.description ?? "Sin descripcion disponible.",
+    description: b.description ?? "Sin descripción disponible.",
     coverUrl:
       b.coverUrl ||
       "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400&h=600&fit=crop",

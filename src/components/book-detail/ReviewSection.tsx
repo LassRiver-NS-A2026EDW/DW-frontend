@@ -35,34 +35,34 @@ export function ReviewSection({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Resenas</CardTitle>
+        <CardTitle>Reseñas</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
         {currentUser && !userReview && (
           <div className="space-y-4 p-6 bg-muted/30 rounded-xl border border-border">
             <div>
-              <label className="text-sm font-medium mb-3 block">Tu Calificacion</label>
+              <label className="text-sm font-medium mb-3 block">Tu calificación</label>
               <RatingStars rating={rating} onRatingChange={onRatingChange} size="lg" />
             </div>
             <div>
-              <label className="text-sm font-medium mb-2 block">Tu Resena ({comment.length}/2000)</label>
+              <label className="text-sm font-medium mb-2 block">Tu reseña ({comment.length}/2000)</label>
               <Textarea
-                placeholder="Comparte tu opinion sobre este libro..."
+                placeholder="Comparte tu opinión sobre este libro..."
                 value={comment}
                 onChange={(event) => onCommentChange(event.target.value.slice(0, 2000))}
                 rows={4}
               />
             </div>
-            <Button onClick={onSubmitReview}>Publicar Resena</Button>
+            <Button onClick={onSubmitReview}>Publicar reseña</Button>
           </div>
         )}
 
         {!currentUser && (
           <EmptyState
             icon={LogIn}
-            title="Inicia sesion para escribir resenas"
-            description="Comparte tu opinion sobre este libro con la comunidad"
-            actionLabel="Iniciar Sesion"
+            title="Inicia sesión para escribir reseñas"
+            description="Comparte tu opinión sobre este libro con la comunidad"
+            actionLabel="Iniciar sesión"
             onAction={onRequestLogin}
           />
         )}
@@ -77,7 +77,7 @@ export function ReviewSection({
             />
           ))}
           {reviews.length === 0 && (
-            <p className="text-center text-muted-foreground py-8">No hay resenas aun. Se el primero en escribir una.</p>
+            <p className="text-center text-muted-foreground py-8">No hay reseñas aún. Sé el primero en escribir una.</p>
           )}
         </div>
       </CardContent>

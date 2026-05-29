@@ -1,5 +1,6 @@
 import * as Select from "@radix-ui/react-select";
 import { SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { formatLanguage } from "../utils/display";
 
 interface BookFiltersProps {
   categories: string[];
@@ -41,6 +42,7 @@ export function BookFilters({
         onValueChange={onLanguageChange}
         options={languages}
         allLabel="Todos los idiomas"
+        labelFor={formatLanguage}
       />
       <FilterSelect
         label="Rating Minimo"
