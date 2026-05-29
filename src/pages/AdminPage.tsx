@@ -40,6 +40,7 @@ import { toast } from "sonner";
 import { EmptyState } from "../components/EmptyState";
 import { StatusBadge } from "../components/StatusBadge";
 import { ReviewComment } from "../components/reviews/ReviewComment";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Book } from "../mocks/mockData";
 import { booksApi, type BookCopyResponse } from "../api/books";
 
@@ -50,7 +51,7 @@ const blankBookForm: Omit<Book, "id"> = {
   author: "",
   isbn: "",
   category: "",
-  language: "Espanol",
+  language: "Español",
   publisher: "",
   publishDate: "",
   pages: 1,
@@ -69,6 +70,7 @@ export function Admin() {
     reviews,
     addBook,
     updateBook,
+    deleteBook,
     uploadBookPdf,
     downloadBookPdf,
     createBookCopy,
@@ -92,6 +94,8 @@ export function Admin() {
   const [bookCopies, setBookCopies] = useState<Record<string, BookCopyResponse[]>>({});
   const [copiesLoadingBookId, setCopiesLoadingBookId] = useState<string | null>(null);
   const [retiringCopyId, setRetiringCopyId] = useState<number | null>(null);
+  const [bookPendingDelete, setBookPendingDelete] = useState<Book | null>(null);
+  const [deletingBookId, setDeletingBookId] = useState<string | null>(null);
 
   useEffect(() => {
     if (currentUser?.role !== "admin" && currentUser?.role !== "librarian") return;
@@ -302,6 +306,29 @@ export function Admin() {
     }
   };
 
+  const confirmDeleteBook = async () => {
+    if (!bookPendingDelete) return;
+    const book = bookPendingDelete;
+    setDeletingBookId(book.id);
+    try {
+      await deleteBook(book.id);
+      toast.success("Libro y ejemplares eliminados");
+      if (expandedCopiesBookId === book.id) {
+        setExpandedCopiesBookId(null);
+      }
+      setBookCopies((current) => {
+        const next = { ...current };
+        delete next[book.id];
+        return next;
+      });
+      setBookPendingDelete(null);
+    } catch (err: any) {
+      toast.error(err?.message || "No se pudo eliminar el libro");
+    } finally {
+      setDeletingBookId(null);
+    }
+  };
+
   return (
     <div className="flex-1 overflow-auto">
       <div className="p-6 space-y-6">
@@ -504,6 +531,20 @@ export function Admin() {
                               aria-label="Ver ejemplares"
                             >
                               <List className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setBookPendingDelete(book)}
+                              disabled={deletingBookId === book.id}
+                              aria-label="Eliminar libro y ejemplares"
+                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                            >
+                              {deletingBookId === book.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
                             </Button>
                           </div>
                         </TableCell>
@@ -746,6 +787,32 @@ export function Admin() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={Boolean(bookPendingDelete)}
+        onOpenChange={(open) => {
+          if (!open && !deletingBookId) setBookPendingDelete(null);
+        }}
+        title="¿Eliminar libro y ejemplares?"
+        description={
+          bookPendingDelete && (
+            <div className="space-y-2 text-sm">
+              <p>
+                Se eliminará <strong>{bookPendingDelete.title}</strong> junto con todos sus ejemplares.
+              </p>
+              <p>
+                También se limpiarán reseñas, favoritos, reservas históricas y préstamos ya devueltos asociados al libro.
+              </p>
+              <p className="text-muted-foreground">
+                No se permitirá eliminar si existen préstamos activos, vencidos o usuarios en cola de reserva.
+              </p>
+            </div>
+          )
+        }
+        confirmLabel={deletingBookId ? "Eliminando..." : "Eliminar libro"}
+        destructive
+        onConfirm={confirmDeleteBook}
+      />
     </div>
   );
 }

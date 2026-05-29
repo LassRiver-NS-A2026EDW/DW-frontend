@@ -90,7 +90,7 @@ interface AppContextType {
   deleteReview: (reviewId: string) => void;
   addBook: (book: Omit<Book, "id">) => Promise<Book>;
   updateBook: (bookId: string, updates: Partial<Book>) => Promise<void>;
-  deleteBook: (bookId: string) => void;
+  deleteBook: (bookId: string) => Promise<void>;
   uploadBookPdf: (bookId: string, file: File) => Promise<void>;
   downloadBookPdf: (bookId: string, url: string) => Promise<void>;
   addLoan: (loan: Omit<Loan, "id">, durationMinutes: number) => Promise<void>;
@@ -406,10 +406,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteBook = async (bookId: string) => {
+    await booksApi.deleteBook(bookId);
     queryClient.setQueriesData({ queryKey: ["books"] }, (data: any) => {
       if (!data?.content) return data;
       return { ...data, content: data.content.filter((book: Book) => book.id !== bookId) };
     });
+    setSelectedBookState((current) => (current?.id === bookId ? null : current));
+    setReviews((current) => current.filter((review) => review.bookId !== bookId));
+    queryClient.removeQueries({ queryKey: queryKeys.book(bookId) });
+    queryClient.removeQueries({ queryKey: queryKeys.reviewsByBook(bookId) });
+    await Promise.all([
+      invalidateBooks(),
+      refreshBookFacets(),
+      refreshFavorites(),
+      refreshLoans(),
+      refreshReservations(),
+      refreshAdminReviews(),
+    ]);
   };
 
   const uploadBookPdf = async (bookId: string, file: File) => {

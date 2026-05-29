@@ -113,6 +113,10 @@ export const booksApi = {
     return http<BookResponse>(`/books/${id}/status`, { method: "PATCH", query: { status } });
   },
 
+  deleteBook(id: string | number): Promise<void> {
+    return http<void>(`/books/${id}`, { method: "DELETE" });
+  },
+
   availability(id: string | number): Promise<BookAvailabilityResponse> {
     return http<BookAvailabilityResponse>(`/books/${id}/availability`, { method: "GET", auth: false });
   },
