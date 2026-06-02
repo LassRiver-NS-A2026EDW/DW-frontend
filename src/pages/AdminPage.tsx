@@ -66,6 +66,7 @@ export function Admin() {
   const {
     currentUser,
     books,
+    bookTotalElements,
     loans,
     reviews,
     addBook,
@@ -123,7 +124,7 @@ export function Admin() {
   const hiddenReviews = adminReviews.filter((review) => review.flagged);
 
   const stats = {
-    totalBooks: books.length,
+    totalBooks: bookTotalElements,
     activeLoans: loans.filter((l) => l.status === "active").length,
     overdueLoans: loans.filter((l) => l.status === "overdue").length,
     flaggedReviews: hiddenReviews.length,
