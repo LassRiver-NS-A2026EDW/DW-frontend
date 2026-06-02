@@ -41,6 +41,7 @@ import { EmptyState } from "../components/EmptyState";
 import { StatusBadge } from "../components/StatusBadge";
 import { ReviewComment } from "../components/reviews/ReviewComment";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { CatalogPagination } from "../components/catalog/CatalogPagination";
 import { Book } from "../mocks/mockData";
 import { booksApi, type BookCopyResponse } from "../api/books";
 
@@ -67,6 +68,9 @@ export function Admin() {
     currentUser,
     books,
     bookTotalElements,
+    bookPage,
+    bookTotalPages,
+    setBookPage,
     loans,
     reviews,
     addBook,
@@ -567,6 +571,9 @@ export function Admin() {
                   ))}
                 </TableBody>
               </Table>
+              <div className="p-4 border-t border-border flex justify-end">
+                <CatalogPagination page={bookPage} totalPages={bookTotalPages} onPageChange={setBookPage} />
+              </div>
             </Card>
           </div>
         )}
